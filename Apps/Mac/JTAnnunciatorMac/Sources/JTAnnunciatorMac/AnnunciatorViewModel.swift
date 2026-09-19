@@ -42,6 +42,9 @@ final class AnnunciatorViewModel: ObservableObject {
     @Published private(set) var callbookRecords: [String: CallbookRecord] = [:]
     /// Set when the callbook rejects the saved credentials; cleared when they're changed.
     @Published private(set) var callbookError: String?
+    /// Set when QRZ lookups are switched on but can't run because the username or password is
+    /// missing; shown in the status bar so it isn't a silent failure.
+    @Published private(set) var callbookWarning: String?
 
     /// When true (the default) the display clears as soon as a decode from a new cycle arrives.
     @Published var clearsOnNewCycle: Bool = AppSettings.clearsOnNewCycle {
@@ -157,6 +160,11 @@ final class AnnunciatorViewModel: ObservableObject {
         callbookRecords.removeAll()
         callbookError = nil
         let username = AppSettings.qrzUsername, password = AppSettings.qrzPassword
+        if AppSettings.qrzEnabled, username.isEmpty || password.isEmpty {
+            callbookWarning = "QRZ lookups are on but no \(username.isEmpty ? "username" : "password") is saved — set it in Settings → Lookup"
+        } else {
+            callbookWarning = nil
+        }
         callbook = AppSettings.qrzEnabled && !username.isEmpty && !password.isEmpty
             ? QRZClient(username: username, password: password) : nil
     }
@@ -308,11 +316,7 @@ final class AnnunciatorViewModel: ObservableObject {
                 worked: workedInfo(for: decode)
             ))
             trimIfNeeded(&entries)
-            // Only stations you might work: CQs and calls to you, not other people's exchanges.
-            if let callsign, MessageClassifier.isCQ(decode.message)
-                || MessageClassifier.isDirected(decode.message, to: myCallsign) {
-                requestCallbook(for: callsign)
-            }
+            if let callsign { requestCallbook(for: callsign) }
             // Skip WSJT-X's re-deliveries of a decode. One box per calling station: a later message
             // from the same callsign (report, then RR73) updates its box in place.
             if decode.isNew, MessageClassifier.isDirected(decode.message, to: myCallsign) {

@@ -56,6 +56,12 @@ struct AnnunciatorView: View {
                     .lineLimit(1)
             }
 
+            if let problem = viewModel.callbookWarning ?? viewModel.callbookError {
+                Label(problem, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+            }
+
             if let error = viewModel.lastErrorDescription {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)

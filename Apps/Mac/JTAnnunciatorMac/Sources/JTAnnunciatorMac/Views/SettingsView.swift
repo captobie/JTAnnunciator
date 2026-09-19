@@ -159,7 +159,7 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
-                Text("Uses the QRZ XML Data service, which needs a QRZ XML subscription. Name, location and grid for CQ callers and stations calling you appear in the decode hover text.")
+                Text("Uses the QRZ XML Data service, which needs a QRZ XML subscription. Name, location and grid for decoded stations appear in the decode hover text.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
