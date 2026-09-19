@@ -70,18 +70,19 @@ struct AnnunciatorView: View {
 
     private var decodeList: some View {
         VSplitView {
-            DecodePane(title: "All Decodes", entries: viewModel.entries, emptyText: "Waiting for decodes…", onReply: viewModel.reply)
+            DecodePane(title: "All Decodes", entries: viewModel.entries, callbook: viewModel.callbookRecords, emptyText: "Waiting for decodes…", onReply: viewModel.reply)
                 .frame(minHeight: 120)
             HSplitView {
                 DecodePane(
                     title: viewModel.myCallsign.isEmpty ? "Calling Me" : "Calling \(viewModel.myCallsign)",
                     entries: viewModel.callingMeEntries,
+                    callbook: viewModel.callbookRecords,
                     emptyText: viewModel.myCallsign.isEmpty ? "Set your callsign in Settings" : "No one calling you",
                     clearActions: ClearActions(one: viewModel.clearCallingMe, all: viewModel.clearAllCallingMe),
                     onReply: viewModel.reply
                 )
                 .frame(minWidth: 200)
-                DecodePane(title: "CQ", entries: viewModel.cqEntries, emptyText: "No CQs", onReply: viewModel.reply)
+                DecodePane(title: "CQ", entries: viewModel.cqEntries, callbook: viewModel.callbookRecords, emptyText: "No CQs", onReply: viewModel.reply)
                     .frame(minWidth: 200)
             }
             .frame(minHeight: 120)
@@ -100,6 +101,7 @@ private struct ClearActions {
 private struct DecodePane: View {
     let title: String
     let entries: [DecodeEntry]
+    let callbook: [String: CallbookRecord]
     let emptyText: String
     var clearActions: ClearActions?
     let onReply: (WSJTXDecode) -> Void
@@ -122,7 +124,7 @@ private struct DecodePane: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 10)], spacing: 10) {
                     ForEach(entries) { entry in
-                        DecodeBox(entry: entry)
+                        DecodeBox(entry: entry, record: entry.callsign.flatMap { callbook[$0] })
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { onReply(entry.decode) }
                             .contextMenu {
@@ -148,6 +150,7 @@ private struct DecodePane: View {
 /// colored fill and border.
 private struct DecodeBox: View {
     let entry: DecodeEntry
+    let record: CallbookRecord?
 
     private var decode: WSJTXDecode { entry.decode }
     private var tint: Color? { entry.alert.map(ColorCoding.color) }
@@ -190,6 +193,10 @@ private struct DecodeBox: View {
         lines.append(detail.joined(separator: "  "))
         if let country = entry.country {
             lines.append(country)
+        }
+        if let record {
+            let detail = [record.name, record.location, record.grid].compactMap { $0 }.joined(separator: " · ")
+            if !detail.isEmpty { lines.append(detail) }
         }
         if let alert = entry.alert {
             lines.append(ColorCoding.badgeText(for: alert.reason))

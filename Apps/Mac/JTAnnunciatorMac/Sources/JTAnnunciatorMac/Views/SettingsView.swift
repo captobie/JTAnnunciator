@@ -14,6 +14,11 @@ struct SettingsView: View {
     @State private var myGrid: String = ""
     @State private var clearsOnNewCycle: Bool = true
     @State private var logbooks: [LogbookConnection] = []
+    @State private var qrzEnabled: Bool = false
+    @State private var qrzUsername: String = ""
+    @State private var qrzPassword: String = ""
+    @State private var qrzTestResult: (message: String, succeeded: Bool)?
+    @State private var qrzTesting = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -127,6 +132,38 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Callbook") {
+                Toggle("Look up callsigns on QRZ.com", isOn: $qrzEnabled)
+                HStack {
+                    Text("Username")
+                    TextField("", text: $qrzUsername)
+                        .frame(width: 180)
+                        .autocorrectionDisabled()
+                }
+                HStack {
+                    Text("Password")
+                    SecureField("", text: $qrzPassword)
+                        .frame(width: 180)
+                }
+                HStack {
+                    Button("Test Login", action: testQRZLogin)
+                        .disabled(qrzTesting || qrzUsername.isEmpty || qrzPassword.isEmpty)
+                    if let result = qrzTestResult {
+                        Text(result.message)
+                            .font(.caption)
+                            .foregroundStyle(result.succeeded ? .green : .red)
+                    }
+                }
+                if let error = viewModel.callbookError {
+                    Text("Lookups stopped: \(error)")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                Text("Uses the QRZ XML Data service, which needs a QRZ XML subscription. Name, location and grid for CQ callers and stations calling you appear in the decode hover text. The password is stored in your Keychain.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Log Connections") {
                 if logbooks.isEmpty {
                     Text("No logs connected. Add your logging program to see stations you've already worked marked in the decode list.")
@@ -204,6 +241,10 @@ struct SettingsView: View {
         myGrid = viewModel.myGrid
         clearsOnNewCycle = viewModel.clearsOnNewCycle
         logbooks = viewModel.logbookConnections
+        qrzEnabled = AppSettings.qrzEnabled
+        qrzUsername = AppSettings.qrzUsername
+        qrzPassword = AppSettings.qrzPassword
+        qrzTestResult = nil
     }
 
     private func save() {
@@ -215,6 +256,10 @@ struct SettingsView: View {
         viewModel.myGrid = myGrid
         viewModel.clearsOnNewCycle = clearsOnNewCycle
         viewModel.setLogbookConnections(logbooks)
+        if qrzEnabled != AppSettings.qrzEnabled || qrzUsername != AppSettings.qrzUsername
+            || qrzPassword != AppSettings.qrzPassword {
+            viewModel.setQRZCredentials(enabled: qrzEnabled, username: qrzUsername, password: qrzPassword)
+        }
         if ctyDatPath != (AppSettings.ctyDatPath ?? "") {
             AppSettings.ctyDatPath = ctyDatPath
             viewModel.reloadDXCCDatabase()
@@ -225,6 +270,25 @@ struct SettingsView: View {
     private func cancel() {
         loadDrafts()
         closeWindow()
+    }
+
+    private func testQRZLogin() {
+        qrzTesting = true
+        qrzTestResult = nil
+        let client = QRZClient(username: qrzUsername, password: qrzPassword)
+        Task {
+            do {
+                let expiry = try await client.login()
+                if let expiry, expiry.lowercased().contains("non-subscriber") {
+                    qrzTestResult = ("Signed in, but this account has no XML subscription — lookups will be limited.", false)
+                } else {
+                    qrzTestResult = ("Signed in.", true)
+                }
+            } catch {
+                qrzTestResult = (error.localizedDescription, false)
+            }
+            qrzTesting = false
+        }
     }
 
     private func closeWindow() {

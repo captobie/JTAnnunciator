@@ -15,6 +15,9 @@ enum AppSettings {
         static let myGrid = "com.jtannunciator.myGrid"
         static let clearsOnNewCycle = "com.jtannunciator.clearsOnNewCycle"
         static let logbookConnections = "com.jtannunciator.logbookConnections"
+        static let qrzEnabled = "com.jtannunciator.qrzEnabled"
+        static let qrzUsername = "com.jtannunciator.qrzUsername"
+        static let qrzPasswordAccount = "qrzPassword"
     }
 
     static func loadWantedList() -> WantedList? {
@@ -82,5 +85,21 @@ enum AppSettings {
             guard let data = try? JSONEncoder().encode(newValue) else { return }
             UserDefaults.standard.set(data, forKey: Key.logbookConnections)
         }
+    }
+
+    static var qrzEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: Key.qrzEnabled) }
+        set { UserDefaults.standard.set(newValue, forKey: Key.qrzEnabled) }
+    }
+
+    static var qrzUsername: String {
+        get { UserDefaults.standard.string(forKey: Key.qrzUsername) ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: Key.qrzUsername) }
+    }
+
+    /// Kept in the Keychain rather than UserDefaults.
+    static var qrzPassword: String {
+        get { KeychainStore.string(for: Key.qrzPasswordAccount) ?? "" }
+        set { KeychainStore.set(newValue, for: Key.qrzPasswordAccount) }
     }
 }

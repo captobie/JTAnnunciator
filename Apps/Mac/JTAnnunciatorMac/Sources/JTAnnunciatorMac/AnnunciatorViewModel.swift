@@ -38,6 +38,10 @@ final class AnnunciatorViewModel: ObservableObject {
     @Published private(set) var logbookStatuses: [UUID: String] = [:]
     /// Distinct callsigns across all enabled logbooks.
     @Published private(set) var logbookCallsignCount = 0
+    /// Callbook results by callsign, shown in decode hover details.
+    @Published private(set) var callbookRecords: [String: CallbookRecord] = [:]
+    /// Set when the callbook rejects the saved credentials; cleared when they're changed.
+    @Published private(set) var callbookError: String?
 
     /// When true (the default) the display clears as soon as a decode from a new cycle arrives.
     @Published var clearsOnNewCycle: Bool = AppSettings.clearsOnNewCycle {
@@ -78,6 +82,11 @@ final class AnnunciatorViewModel: ObservableObject {
     /// a log that actually changed (e.g. MacLoggerDX saved a new QSO).
     private var logbookModificationDates: [UUID: Date] = [:]
     private var logbookLoadGeneration = 0
+    private var callbook: (any CallbookProvider)?
+    /// Callsigns already looked up (found or not) or queued, so each is asked for once.
+    private var callbookRequested: Set<String> = []
+    private var callbookQueue: [String] = []
+    private var callbookWorker: Task<Void, Never>?
     /// How to reach each WSJT-X instance (keyed by its client id), refreshed by every datagram it
     /// sends, so a reply always goes to the instance that produced the decode.
     private var responders: [String: WSJTXUDPListener.Responder] = [:]
@@ -88,6 +97,7 @@ final class AnnunciatorViewModel: ObservableObject {
         let database = Self.loadDXCCDatabase()
         engine = AlertEngine(wantedList: storedWantedList, dxccLookup: database)
         dxccDatabaseEntityCount = database.prefixes.count + database.exactCallsigns.count
+        configureCallbook()
     }
 
     func clearCallingMe(_ entry: DecodeEntry) {
@@ -129,6 +139,63 @@ final class AnnunciatorViewModel: ObservableObject {
         logbookConnections = connections
         AppSettings.logbookConnections = connections
         reloadLogbooks()
+    }
+
+    /// Saves the QRZ credentials and restarts callbook lookups with them.
+    func setQRZCredentials(enabled: Bool, username: String, password: String) {
+        AppSettings.qrzEnabled = enabled
+        AppSettings.qrzUsername = username
+        AppSettings.qrzPassword = password
+        configureCallbook()
+    }
+
+    private func configureCallbook() {
+        callbookWorker?.cancel()
+        callbookWorker = nil
+        callbookQueue.removeAll()
+        callbookRequested.removeAll()
+        callbookRecords.removeAll()
+        callbookError = nil
+        let username = AppSettings.qrzUsername, password = AppSettings.qrzPassword
+        callbook = AppSettings.qrzEnabled && !username.isEmpty && !password.isEmpty
+            ? QRZClient(username: username, password: password) : nil
+    }
+
+    /// Queues a callbook lookup for `callsign` unless it has been asked for already. Lookups run
+    /// one at a time so a busy band doesn't flood the service.
+    private func requestCallbook(for callsign: String) {
+        guard callbook != nil, callbookError == nil, callbookRequested.insert(callsign).inserted else { return }
+        callbookQueue.append(callsign)
+        guard callbookWorker == nil else { return }
+        callbookWorker = Task { [weak self] in
+            while let self, let next = self.nextCallbookRequest() {
+                await self.performCallbookLookup(next)
+            }
+            self?.callbookWorker = nil
+        }
+    }
+
+    private func nextCallbookRequest() -> (callsign: String, provider: any CallbookProvider)? {
+        guard !Task.isCancelled, let provider = callbook, !callbookQueue.isEmpty else { return nil }
+        return (callbookQueue.removeFirst(), provider)
+    }
+
+    private func performCallbookLookup(_ request: (callsign: String, provider: any CallbookProvider)) async {
+        do {
+            let record = try await request.provider.lookup(callsign: request.callsign)
+            guard !Task.isCancelled else { return }
+            if let record { callbookRecords[request.callsign] = record }
+        } catch let error as CallbookError {
+            guard !Task.isCancelled else { return }
+            if case .authenticationFailed = error {
+                callbookError = error.localizedDescription
+                callbookQueue.removeAll()
+            } else {
+                callbookRequested.remove(request.callsign)   // transient; may retry on a later decode
+            }
+        } catch {
+            callbookRequested.remove(request.callsign)
+        }
     }
 
     /// Re-reads all enabled logbooks off the main thread, then swaps the result into the engine.
@@ -241,6 +308,11 @@ final class AnnunciatorViewModel: ObservableObject {
                 worked: workedInfo(for: decode)
             ))
             trimIfNeeded(&entries)
+            // Only stations you might work: CQs and calls to you, not other people's exchanges.
+            if let callsign, MessageClassifier.isCQ(decode.message)
+                || MessageClassifier.isDirected(decode.message, to: myCallsign) {
+                requestCallbook(for: callsign)
+            }
             // Skip WSJT-X's re-deliveries of a decode. One box per calling station: a later message
             // from the same callsign (report, then RR73) updates its box in place.
             if decode.isNew, MessageClassifier.isDirected(decode.message, to: myCallsign) {
