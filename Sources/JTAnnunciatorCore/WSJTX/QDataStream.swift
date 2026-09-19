@@ -63,25 +63,14 @@ struct QDataStreamReader {
         return Double(bitPattern: bits)
     }
 
-    /// Qt serializes `QString` as a 4-byte length **in bytes** of the UTF-16BE payload that
-    /// follows (`0xFFFFFFFF` for a null string, distinct from an empty string of length 0).
+    /// WSJT-X's "utf8" string fields are a `QByteArray` holding UTF-8: a 4-byte byte length
+    /// (`0xFFFFFFFF` for null, distinct from empty) followed by the raw bytes. Verified against
+    /// live datagrams from a running WSJT-X 3.0 (an earlier version of this reader wrongly
+    /// assumed UTF-16BE `QString`).
     mutating func readQString() throws -> String {
-        let length = try readUInt32()
-        if length == 0xFFFF_FFFF {
-            return ""
-        }
-        guard length % 2 == 0 else { throw Error.invalidString }
-        let bytes = try take(Int(length))
-        var utf16 = [UInt16]()
-        utf16.reserveCapacity(bytes.count / 2)
-        var index = bytes.startIndex
-        while index < bytes.endIndex {
-            let hi = UInt16(bytes[index])
-            let lo = UInt16(bytes[index + 1])
-            utf16.append((hi << 8) | lo)
-            index += 2
-        }
-        return String(utf16CodeUnits: utf16, count: utf16.count)
+        let bytes = try readQByteArray()
+        guard let string = String(data: bytes, encoding: .utf8) else { throw Error.invalidString }
+        return string
     }
 
     /// Qt's `QTime` (as used inside WSJT-X's Decode/Reply/WSPR Decode messages) is just
@@ -155,11 +144,8 @@ struct QDataStreamWriter {
     }
 
     mutating func writeQString(_ string: String) {
-        let utf16 = Array(string.utf16)
-        writeUInt32(UInt32(utf16.count * 2))
-        for unit in utf16 {
-            data.append(UInt8(unit >> 8))
-            data.append(UInt8(unit & 0xFF))
-        }
+        let bytes = Array(string.utf8)
+        writeUInt32(UInt32(bytes.count))
+        data.append(contentsOf: bytes)
     }
 }

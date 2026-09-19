@@ -6,17 +6,17 @@ import Foundation
 /// and the message type — all `quint32`, all big-endian (Qt's `QDataStream` default). This
 /// decoder targets schema 2/3 (Qt_5_2 / Qt_5_4), which is what every WSJT-X release since 1.9
 /// has sent; schema 1 (Qt_5_0) is documented upstream as broken and unsupported by WSJT-X itself.
-enum WSJTXMessageDecoder {
+public enum WSJTXMessageDecoder {
     /// WSJT-X's fixed magic number identifying a datagram as its own protocol, not stray UDP
     /// traffic on the same port.
     static let magicNumber: UInt32 = 0xadbc_cbda
 
-    enum Error: Swift.Error, Equatable {
+    public enum Error: Swift.Error, Equatable {
         case badMagicNumber
         case truncated
     }
 
-    static func decode(_ datagram: Data) throws -> WSJTXMessage {
+    public static func decode(_ datagram: Data) throws -> WSJTXMessage {
         var reader = QDataStreamReader(datagram)
         let magic = try readOrThrow { try reader.readUInt32() }
         guard magic == magicNumber else { throw Error.badMagicNumber }

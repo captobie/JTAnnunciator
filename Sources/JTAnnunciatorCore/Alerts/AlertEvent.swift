@@ -3,22 +3,22 @@ import Foundation
 /// Why a station triggered an alert. A station can match both — matching on the more specific
 /// reason (`wantedCallsign`) takes priority when both are true, but the event records whichever
 /// actually matched so the UI can show the right badge/color.
-enum AlertReason: Equatable {
+public enum AlertReason: Equatable {
     case wantedCallsign
     case wantedDXCC(entityName: String, primaryPrefix: String)
 }
 
 /// A single "this station is worth your attention" event, produced by `AlertEngine` from a
 /// WSJT-X Decode message.
-struct AlertEvent: Identifiable, Equatable {
-    let id: UUID
-    var callsign: String
-    var reason: AlertReason
-    var decode: WSJTXDecode
-    var alreadyWorked: Bool
-    var timestamp: Date
+public struct AlertEvent: Identifiable, Equatable {
+    public let id: UUID
+    public var callsign: String
+    public var reason: AlertReason
+    public var decode: WSJTXDecode
+    public var alreadyWorked: Bool
+    public var timestamp: Date
 
-    init(
+    public init(
         id: UUID = UUID(), callsign: String, reason: AlertReason, decode: WSJTXDecode,
         alreadyWorked: Bool, timestamp: Date = Date()
     ) {

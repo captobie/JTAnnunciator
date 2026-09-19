@@ -6,6 +6,7 @@ struct SettingsView: View {
 
     @State private var ctyDatPath: String = AppSettings.ctyDatPath ?? ""
     @State private var udpPortText: String = String(AppSettings.udpPort)
+    @State private var multicastText: String = AppSettings.multicastAddress
     @State private var alertSoundEnabled: Bool = AppSettings.alertSoundEnabled
 
     var body: some View {
@@ -17,7 +18,13 @@ struct SettingsView: View {
                         .frame(width: 80)
                         .onSubmit(applyUDPPort)
                 }
-                Text("Must match WSJT-X's Settings → Reporting → UDP Server port. Changing this requires restarting the listener (Cmd+Q and relaunch, or toggle via the main window).")
+                HStack {
+                    Text("Multicast Group")
+                    TextField("224.0.0.1 (blank = unicast)", text: $multicastText)
+                        .frame(width: 180)
+                        .onSubmit { AppSettings.multicastAddress = multicastText }
+                }
+                Text("Set WSJT-X's UDP Server address to this same multicast group so other apps can share the feed. Must match WSJT-X's Settings → Reporting → UDP Server port. Changing this requires restarting the listener (Cmd+Q and relaunch, or toggle via the main window).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

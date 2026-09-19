@@ -1,22 +1,22 @@
 import Foundation
 
 /// One DXCC entity (a "country" in ham-radio terms) as described by a cty.dat entry.
-struct CTYEntry: Equatable {
-    var name: String
-    var cqZone: Int
-    var ituZone: Int
-    var continent: String
-    var latitude: Double
-    var longitude: Double
+public struct CTYEntry: Equatable {
+    public var name: String
+    public var cqZone: Int
+    public var ituZone: Int
+    public var continent: String
+    public var latitude: Double
+    public var longitude: Double
     /// As stored in cty.dat: hours to add to local standard time to get UTC. Carried through
     /// unmodified from the file; not validated against a reference in this session, so treat it
     /// as informational only until double-checked.
-    var utcOffsetHours: Double
-    var primaryPrefix: String
+    public var utcOffsetHours: Double
+    public var primaryPrefix: String
 }
 
 /// Looks up the DXCC entity for a callsign.
-protocol DXCCLookup {
+public protocol DXCCLookup {
     func entity(forCallsign callsign: String) -> CTYEntry?
 }
 
@@ -29,16 +29,16 @@ protocol DXCCLookup {
 ///    stripping a "/SUFFIX" first would break the very match this step exists for.
 /// 2. `CallsignParser`'s portable-suffix heuristic, then the longest prefix match against the
 ///    result (checked from the full token down to a single leading character).
-struct CTYDatabase: DXCCLookup {
-    private(set) var exactCallsigns: [String: CTYEntry] = [:]
-    private(set) var prefixes: [String: CTYEntry] = [:]
+public struct CTYDatabase: DXCCLookup {
+    public private(set) var exactCallsigns: [String: CTYEntry] = [:]
+    public private(set) var prefixes: [String: CTYEntry] = [:]
 
-    init(exactCallsigns: [String: CTYEntry] = [:], prefixes: [String: CTYEntry] = [:]) {
+    public init(exactCallsigns: [String: CTYEntry] = [:], prefixes: [String: CTYEntry] = [:]) {
         self.exactCallsigns = exactCallsigns
         self.prefixes = prefixes
     }
 
-    func entity(forCallsign callsign: String) -> CTYEntry? {
+    public func entity(forCallsign callsign: String) -> CTYEntry? {
         let rawCall = callsign.uppercased()
         if let exact = exactCallsigns[rawCall] {
             return exact

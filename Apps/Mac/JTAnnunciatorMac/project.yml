@@ -1,0 +1,34 @@
+name: JTAnnunciator
+options:
+  bundleIdPrefix: com.jtannunciator
+  deploymentTarget:
+    macOS: "13.0"
+packages:
+  JTAnnunciator:
+    path: ../../..
+targets:
+  JTAnnunciator:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/JTAnnunciatorMac
+    dependencies:
+      - package: JTAnnunciator
+        product: JTAnnunciatorCore
+    info:
+      path: Info.plist
+      properties:
+        CFBundleName: JTAnnunciator
+        CFBundleDisplayName: JTAnnunciator
+        LSMinimumSystemVersion: "13.0"
+        NSHumanReadableCopyright: ""
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jtannunciator.app
+        PRODUCT_NAME: JTAnnunciator
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: NO
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"

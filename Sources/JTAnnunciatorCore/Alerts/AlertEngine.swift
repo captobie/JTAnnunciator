@@ -6,21 +6,21 @@ import Foundation
 ///
 /// A plain struct, not an actor/class: callers (the Mac app's view model) own threading and
 /// simply hold a `var` of this, same pattern as `RigState` in the sibling FTX1Remote project.
-struct AlertEngine {
-    var wantedList: WantedList
-    var dxccLookup: DXCCLookup
+public struct AlertEngine {
+    public var wantedList: WantedList
+    public var dxccLookup: DXCCLookup
 
-    private(set) var workedCallsigns: Set<String> = []
-    private(set) var workedDXCCPrimaryPrefixes: Set<String> = []
+    public private(set) var workedCallsigns: Set<String> = []
+    public private(set) var workedDXCCPrimaryPrefixes: Set<String> = []
 
-    init(wantedList: WantedList, dxccLookup: DXCCLookup) {
+    public init(wantedList: WantedList, dxccLookup: DXCCLookup) {
         self.wantedList = wantedList
         self.dxccLookup = dxccLookup
     }
 
     /// Records a completed, logged QSO so future alerts for that callsign/entity can be marked
     /// "already worked" instead of suppressed outright.
-    mutating func recordQSOLogged(_ qso: WSJTXQSOLogged) {
+    public mutating func recordQSOLogged(_ qso: WSJTXQSOLogged) {
         let call = qso.dxCall.uppercased()
         guard !call.isEmpty else { return }
         workedCallsigns.insert(call)
@@ -32,7 +32,7 @@ struct AlertEngine {
     /// Produces zero or more alerts for a single Decode message. Only genuinely new decodes
     /// (`decode.isNew`) are considered — WSJT-X redelivers the same decode across the rest of its
     /// 15s cycle, and re-alerting on every redelivery would be noisy rather than useful.
-    mutating func process(_ decode: WSJTXDecode) -> [AlertEvent] {
+    public mutating func process(_ decode: WSJTXDecode) -> [AlertEvent] {
         guard decode.isNew else { return [] }
 
         var events: [AlertEvent] = []

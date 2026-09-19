@@ -36,7 +36,7 @@ final class AnnunciatorViewModel: ObservableObject {
     func start() {
         guard listener == nil else { return }
         let port = AppSettings.udpPort
-        let listener = WSJTXUDPListener(port: port)
+        let listener = WSJTXUDPListener(port: port, multicastAddress: AppSettings.multicastAddress)
         listener.onMessage = { [weak self] message in
             Task { @MainActor in self?.handle(message) }
         }

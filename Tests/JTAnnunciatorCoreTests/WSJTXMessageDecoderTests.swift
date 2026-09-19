@@ -185,6 +185,22 @@ final class WSJTXMessageDecoderTests: XCTestCase {
             )
         )
     }
+
+    /// A heartbeat captured verbatim from a live WSJT-X 3.0.1 instance: strings are UTF-8
+    /// `QByteArray`s, not UTF-16 `QString`s.
+    func testDecodeHeartbeatCapturedFromRealWSJTX() throws {
+        let bytes: [UInt8] = [
+            0xad, 0xbc, 0xcb, 0xda, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 6,
+            0x57, 0x53, 0x4a, 0x54, 0x2d, 0x58, 0, 0, 0, 3, 0, 0, 0, 5,
+            0x33, 0x2e, 0x30, 0x2e, 0x31, 0, 0, 0, 6,
+            0x63, 0x30, 0x34, 0x64, 0x64, 0x38,
+        ]
+        let message = try WSJTXMessageDecoder.decode(Data(bytes))
+        XCTAssertEqual(
+            message,
+            .heartbeat(WSJTXHeartbeat(id: "WSJT-X", maximumSchemaNumber: 3, version: "3.0.1", revision: "c04dd8"))
+        )
+    }
 }
 
 private extension QDataStreamWriter {

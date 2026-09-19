@@ -8,6 +8,7 @@ enum AppSettings {
     private enum Key {
         static let wantedList = "com.jtannunciator.wantedList"
         static let ctyDatPath = "com.jtannunciator.ctyDatPath"
+        static let multicastAddress = "com.jtannunciator.multicastAddress"
         static let udpPort = "com.jtannunciator.udpPort"
         static let alertSoundEnabled = "com.jtannunciator.alertSoundEnabled"
     }
@@ -27,6 +28,12 @@ enum AppSettings {
     static var ctyDatPath: String? {
         get { UserDefaults.standard.string(forKey: Key.ctyDatPath) }
         set { UserDefaults.standard.set(newValue, forKey: Key.ctyDatPath) }
+    }
+
+    /// Multicast group to join; empty string means plain unicast. Defaults to 224.0.0.1.
+    static var multicastAddress: String {
+        get { UserDefaults.standard.string(forKey: Key.multicastAddress) ?? "224.0.0.1" }
+        set { UserDefaults.standard.set(newValue, forKey: Key.multicastAddress) }
     }
 
     static var udpPort: UInt16 {

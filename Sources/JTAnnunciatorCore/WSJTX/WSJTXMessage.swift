@@ -4,7 +4,7 @@ import Foundation
 /// taken directly from WSJT-X's `Network/NetworkMessage.hpp` (schema 3 / Qt_5_4, the current
 /// schema as of WSJT-X 2.x). Message types WSJT-X only *receives* (Reply, Halt Tx, Free Text,
 /// Location, Highlight Callsign) aren't modeled yet — v1 is alert-only (listening), not control.
-enum WSJTXMessageType: UInt32 {
+public enum WSJTXMessageType: UInt32 {
     case heartbeat = 0
     case status = 1
     case decode = 2
@@ -21,99 +21,99 @@ enum WSJTXMessageType: UInt32 {
     case highlightCallsign = 13
 }
 
-struct WSJTXHeartbeat: Equatable {
-    var id: String
-    var maximumSchemaNumber: UInt32
-    var version: String
-    var revision: String
+public struct WSJTXHeartbeat: Equatable {
+    public var id: String
+    public var maximumSchemaNumber: UInt32
+    public var version: String
+    public var revision: String
 }
 
-struct WSJTXStatus: Equatable {
-    var id: String
-    var dialFrequencyHz: UInt64
-    var mode: String
-    var dxCall: String
-    var report: String
-    var txMode: String
-    var txEnabled: Bool
-    var transmitting: Bool
-    var decoding: Bool
-    var rxDF: Int32
-    var txDF: Int32
-    var deCall: String
-    var deGrid: String
-    var dxGrid: String
-    var txWatchdog: Bool
-    var subMode: String
-    var fastMode: Bool
-    var specialOperationMode: UInt8
+public struct WSJTXStatus: Equatable {
+    public var id: String
+    public var dialFrequencyHz: UInt64
+    public var mode: String
+    public var dxCall: String
+    public var report: String
+    public var txMode: String
+    public var txEnabled: Bool
+    public var transmitting: Bool
+    public var decoding: Bool
+    public var rxDF: Int32
+    public var txDF: Int32
+    public var deCall: String
+    public var deGrid: String
+    public var dxGrid: String
+    public var txWatchdog: Bool
+    public var subMode: String
+    public var fastMode: Bool
+    public var specialOperationMode: UInt8
 }
 
-struct WSJTXDecode: Equatable {
-    var id: String
-    var isNew: Bool
-    var timeMillisSinceMidnightUTC: UInt32?
-    var snr: Int32
-    var deltaTimeSeconds: Double
-    var deltaFrequencyHz: UInt32
-    var mode: String
-    var message: String
-    var lowConfidence: Bool
-    var offAir: Bool
+public struct WSJTXDecode: Equatable {
+    public var id: String
+    public var isNew: Bool
+    public var timeMillisSinceMidnightUTC: UInt32?
+    public var snr: Int32
+    public var deltaTimeSeconds: Double
+    public var deltaFrequencyHz: UInt32
+    public var mode: String
+    public var message: String
+    public var lowConfidence: Bool
+    public var offAir: Bool
 }
 
-struct WSJTXClear: Equatable {
-    var id: String
+public struct WSJTXClear: Equatable {
+    public var id: String
 }
 
-struct WSJTXQSOLogged: Equatable {
-    var id: String
-    var dateTimeOff: Date
-    var dxCall: String
-    var dxGrid: String
-    var txFrequencyHz: UInt64
-    var mode: String
-    var reportSent: String
-    var reportReceived: String
-    var txPower: String
-    var comments: String
-    var name: String
-    var dateTimeOn: Date
-    var operatorCall: String
-    var myCall: String
-    var myGrid: String
-    var exchangeSent: String
-    var exchangeReceived: String
+public struct WSJTXQSOLogged: Equatable {
+    public var id: String
+    public var dateTimeOff: Date
+    public var dxCall: String
+    public var dxGrid: String
+    public var txFrequencyHz: UInt64
+    public var mode: String
+    public var reportSent: String
+    public var reportReceived: String
+    public var txPower: String
+    public var comments: String
+    public var name: String
+    public var dateTimeOn: Date
+    public var operatorCall: String
+    public var myCall: String
+    public var myGrid: String
+    public var exchangeSent: String
+    public var exchangeReceived: String
 }
 
-struct WSJTXClose: Equatable {
-    var id: String
+public struct WSJTXClose: Equatable {
+    public var id: String
 }
 
-struct WSJTXWSPRDecode: Equatable {
-    var id: String
-    var isNew: Bool
-    var timeMillisSinceMidnightUTC: UInt32?
-    var snr: Int32
-    var deltaTimeSeconds: Double
-    var frequencyHz: UInt64
-    var driftHz: Int32
-    var callsign: String
-    var grid: String
-    var powerDBm: Int32
-    var offAir: Bool
+public struct WSJTXWSPRDecode: Equatable {
+    public var id: String
+    public var isNew: Bool
+    public var timeMillisSinceMidnightUTC: UInt32?
+    public var snr: Int32
+    public var deltaTimeSeconds: Double
+    public var frequencyHz: UInt64
+    public var driftHz: Int32
+    public var callsign: String
+    public var grid: String
+    public var powerDBm: Int32
+    public var offAir: Bool
 }
 
-struct WSJTXLoggedADIF: Equatable {
-    var id: String
-    var adifText: String
+public struct WSJTXLoggedADIF: Equatable {
+    public var id: String
+    public var adifText: String
 }
 
 /// A fully decoded WSJT-X UDP datagram. `.unsupported` covers message types this app doesn't
 /// need to act on (Reply/HaltTx/FreeText/Location/HighlightCallsign are "In" messages WSJT-X
 /// never sends us; Replay is a request we'd send, not receive) plus any schema/type this decoder
 /// doesn't recognize.
-enum WSJTXMessage: Equatable {
+public enum WSJTXMessage: Equatable {
     case heartbeat(WSJTXHeartbeat)
     case status(WSJTXStatus)
     case decode(WSJTXDecode)

@@ -1,8 +1,16 @@
 import SwiftUI
+import AppKit
 
 @main
 struct JTAnnunciatorApp: App {
     @StateObject private var viewModel = AnnunciatorViewModel()
+
+    init() {
+        // Launched via `swift run` there is no .app bundle, so macOS defaults to a background
+        // (no Dock icon / no window focus) activation policy. Force a regular foreground app.
+        NSApplication.shared.setActivationPolicy(.regular)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
 
     var body: some Scene {
         WindowGroup {

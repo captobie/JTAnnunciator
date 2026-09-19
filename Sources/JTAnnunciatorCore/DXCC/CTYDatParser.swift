@@ -19,7 +19,7 @@ import Foundation
 ///
 /// Grounded against a real, current cty.dat (WSJT-X's own bundled copy) rather than assumed —
 /// see this type's test fixtures, which are verbatim excerpts of that file.
-enum CTYDatParser {
+public enum CTYDatParser {
     private struct ParsedAlias {
         var base: String
         var isExactCallsign: Bool
@@ -29,7 +29,7 @@ enum CTYDatParser {
         var latLonOverride: (lat: Double, lon: Double)?
     }
 
-    static func parse(_ text: String) -> CTYDatabase {
+    public static func parse(_ text: String) -> CTYDatabase {
         var exactCallsigns: [String: CTYEntry] = [:]
         var prefixes: [String: CTYEntry] = [:]
 
