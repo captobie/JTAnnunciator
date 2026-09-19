@@ -37,6 +37,23 @@ public struct WorkedLog: Equatable {
         var modes: Set<String> = []
         var count = 0
         var lastWorked: Date?
+        /// Contacts per band+mode combination, for "worked on this band and mode" lookups.
+        var byBandMode: [BandMode: Stat] = [:]
+    }
+
+    private struct BandMode: Hashable {
+        var band: String
+        var mode: String
+    }
+
+    private struct Stat: Equatable {
+        var count = 0
+        var lastWorked: Date?
+
+        mutating func absorb(count: Int, lastWorked date: Date?) {
+            self.count += count
+            if let date, date > (lastWorked ?? .distantPast) { lastWorked = date }
+        }
     }
 
     private var entries: [String: Entry] = [:]
@@ -58,6 +75,10 @@ public struct WorkedLog: Equatable {
         if !qso.mode.isEmpty { entry.modes.insert(qso.mode) }
         entry.count += 1
         if let date = qso.date, date > (entry.lastWorked ?? .distantPast) { entry.lastWorked = date }
+        if !qso.band.isEmpty, !qso.mode.isEmpty {
+            entry.byBandMode[BandMode(band: qso.band, mode: qso.mode), default: Stat()]
+                .absorb(count: 1, lastWorked: qso.date)
+        }
         entries[key] = entry
     }
 
@@ -70,6 +91,9 @@ public struct WorkedLog: Equatable {
             if let date = theirs.lastWorked, date > (entry.lastWorked ?? .distantPast) {
                 entry.lastWorked = date
             }
+            for (bandMode, stat) in theirs.byBandMode {
+                entry.byBandMode[bandMode, default: Stat()].absorb(count: stat.count, lastWorked: stat.lastWorked)
+            }
             entries[key] = entry
         }
     }
@@ -80,6 +104,19 @@ public struct WorkedLog: Equatable {
         return WorkedInfo(
             callsign: key, bands: entry.bands.sorted(), modes: entry.modes.sorted(),
             qsoCount: entry.count, lastWorked: entry.lastWorked
+        )
+    }
+
+    /// What the logbook knows about contacts with `callsign` on exactly this band and mode, or
+    /// `nil` if there are none. The result's `bands`/`modes`/`qsoCount`/`lastWorked` describe only
+    /// those matching contacts.
+    public func info(for callsign: String, band: String, mode: String) -> WorkedInfo? {
+        let key = Self.identity(of: callsign)
+        let bandMode = BandMode(band: band.uppercased(), mode: mode.uppercased())
+        guard let stat = entries[key]?.byBandMode[bandMode] else { return nil }
+        return WorkedInfo(
+            callsign: key, bands: [bandMode.band], modes: [bandMode.mode],
+            qsoCount: stat.count, lastWorked: stat.lastWorked
         )
     }
 

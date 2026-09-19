@@ -49,4 +49,22 @@ final class WorkedLogTests: XCTestCase {
         XCTAssertEqual(MessageClassifier.senderCallsign("<K1ABC> W9XYZ R-05"), "W9XYZ")
         XCTAssertNil(MessageClassifier.senderCallsign("TNX 73"))
     }
+
+    func testBandModeLookupCountsOnlyMatchingContacts() {
+        let log = WorkedLog(qsos: [
+            LogbookQSO(callsign: "K1ABC", band: "20M", mode: "FT8"),
+            LogbookQSO(callsign: "K1ABC", band: "20M", mode: "FT8"),
+            LogbookQSO(callsign: "K1ABC", band: "40M", mode: "FT4"),
+        ])
+        let info = log.info(for: "K1ABC", band: "20M", mode: "FT8")
+        XCTAssertEqual(info?.qsoCount, 2)
+        XCTAssertEqual(info?.bands, ["20M"])
+        XCTAssertNil(log.info(for: "K1ABC", band: "40M", mode: "FT8"))
+    }
+
+    func testBandFromFrequency() {
+        XCTAssertEqual(Band.name(forFrequencyHz: 14_074_000), "20M")
+        XCTAssertEqual(Band.name(forFrequencyHz: 7_074_000), "40M")
+        XCTAssertNil(Band.name(forFrequencyHz: 1_000_000))
+    }
 }

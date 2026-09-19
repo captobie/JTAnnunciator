@@ -25,9 +25,10 @@ enum ColorCoding {
         }
     }
 
-    /// "WORKED · 20M 40M" (bands are omitted when only known from this session).
+    /// "WORKED · 20M FT8" — the band and mode the contact matched.
     static func workedBadgeText(for info: WorkedInfo) -> String {
-        info.bands.isEmpty ? "WORKED" : "WORKED · " + info.bands.joined(separator: " ")
+        let detail = (info.bands + info.modes).joined(separator: " ")
+        return detail.isEmpty ? "WORKED" : "WORKED · " + detail
     }
 
     /// Tooltip detail: QSO count, modes and last-worked date.

@@ -22,8 +22,18 @@ final class LogbookEngineTests: XCTestCase {
         var engine = AlertEngine(wantedList: WantedList(), dxccLookup: NoDXCC())
         engine.setLogbook(WorkedLog(qsos: [LogbookQSO(callsign: "K1ABC", band: "20M", mode: "FT8")]))
 
-        XCTAssertEqual(engine.workedInfo(for: decode("CQ K1ABC FN42"))?.bands, ["20M"])
-        XCTAssertNil(engine.workedInfo(for: decode("CQ W9XYZ EN52")))
+        XCTAssertEqual(engine.workedInfo(for: decode("CQ K1ABC FN42"), band: "20M", mode: "FT8")?.bands, ["20M"])
+        XCTAssertNil(engine.workedInfo(for: decode("CQ W9XYZ EN52"), band: "20M", mode: "FT8"))
+    }
+
+    func testWorkedOnlyOnMatchingBandAndMode() {
+        var engine = AlertEngine(wantedList: WantedList(), dxccLookup: NoDXCC())
+        engine.setLogbook(WorkedLog(qsos: [LogbookQSO(callsign: "K1ABC", band: "20M", mode: "FT8")]))
+        let cq = decode("CQ K1ABC FN42")
+
+        XCTAssertNil(engine.workedInfo(for: cq, band: "40M", mode: "FT8"))
+        XCTAssertNil(engine.workedInfo(for: cq, band: "20M", mode: "FT4"))
+        XCTAssertNotNil(engine.workedInfo(for: cq, band: "20m", mode: "ft8"))
     }
 
     func testWantedCallsignAlreadyWorkedFromLogbook() {
@@ -59,17 +69,16 @@ final class LogbookEngineTests: XCTestCase {
         XCTAssertEqual(engine.process(decode("CQ JA1ZZZ PM95")).first?.alreadyWorked, true)
     }
 
-    func testSessionLoggedQSOCountsAsWorkedWithoutBands() {
+    func testSessionLoggedQSOMatchesBandAndMode() {
         var engine = AlertEngine(wantedList: WantedList(), dxccLookup: NoDXCC())
         let qso = WSJTXQSOLogged(
-            id: "WSJT-X", dateTimeOff: Date(), dxCall: "K1ABC", dxGrid: "", txFrequencyHz: 0, mode: "FT8",
+            id: "WSJT-X", dateTimeOff: Date(), dxCall: "K1ABC", dxGrid: "", txFrequencyHz: 14_074_000, mode: "FT8",
             reportSent: "", reportReceived: "", txPower: "", comments: "", name: "", dateTimeOn: Date(),
             operatorCall: "", myCall: "", myGrid: "", exchangeSent: "", exchangeReceived: ""
         )
         engine.recordQSOLogged(qso)
 
-        let info = engine.workedInfo(for: decode("CQ K1ABC FN42"))
-        XCTAssertNotNil(info)
-        XCTAssertEqual(info?.bands, [])
+        XCTAssertNotNil(engine.workedInfo(for: decode("CQ K1ABC FN42"), band: "20M", mode: "FT8"))
+        XCTAssertNil(engine.workedInfo(for: decode("CQ K1ABC FN42"), band: "40M", mode: "FT8"))
     }
 }

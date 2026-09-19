@@ -41,17 +41,21 @@ public struct AlertEngine {
         return workedCallsigns.contains(call) || logbook.contains(call)
     }
 
+    /// Contacts logged this session (QSO Logged messages), kept with band/mode so they take part
+    /// in band+mode matching like logbook contacts.
+    private var sessionLog = WorkedLog()
+
     private func hasWorkedDXCC(_ primaryPrefix: String) -> Bool {
         workedDXCCPrimaryPrefixes.contains(primaryPrefix) || logbookDXCCPrimaryPrefixes.contains(primaryPrefix)
     }
 
-    /// What's known about the station that sent `decode`, or `nil` if it has never been worked.
-    /// Bands/modes come from the logbook; a station worked only this session has none listed.
-    public func workedInfo(for decode: WSJTXDecode) -> WorkedInfo? {
+    /// What's known about contacts with the station that sent `decode` on this exact `band` and
+    /// `mode` (e.g. "20M", "FT8"), or `nil` if it hasn't been worked that way — worked on another
+    /// band or mode doesn't count.
+    public func workedInfo(for decode: WSJTXDecode, band: String, mode: String) -> WorkedInfo? {
         guard let call = MessageClassifier.senderCallsign(decode.message) else { return nil }
-        if let info = logbook.info(for: call) { return info }
-        guard workedCallsigns.contains(call) else { return nil }
-        return WorkedInfo(callsign: call, bands: [], modes: [], qsoCount: 1, lastWorked: nil)
+        return logbook.info(for: call, band: band, mode: mode)
+            ?? sessionLog.info(for: call, band: band, mode: mode)
     }
 
     /// Records a completed, logged QSO so future alerts for that callsign/entity can be marked
@@ -60,6 +64,10 @@ public struct AlertEngine {
         let call = qso.dxCall.uppercased()
         guard !call.isEmpty else { return }
         workedCallsigns.insert(call)
+        sessionLog.add(LogbookQSO(
+            callsign: call, band: Band.name(forFrequencyHz: qso.txFrequencyHz) ?? "", mode: qso.mode,
+            date: qso.dateTimeOff
+        ))
         if let entity = dxccLookup.entity(forCallsign: call) {
             workedDXCCPrimaryPrefixes.insert(entity.primaryPrefix)
         }

@@ -16,6 +16,10 @@ final class AnnunciatorViewModel: ObservableObject {
     /// Decodes on display, in arrival order. By default holds only the current cycle.
     @Published private(set) var entries: [DecodeEntry] = []
     /// Timestamp (ms since midnight UTC) of the cycle currently on display.
+    /// Band and mode WSJT-X is currently on (from its Status messages); worked-before matching
+    /// only counts contacts on this band and mode. `nil` until the first Status arrives.
+    private var currentBand: String?
+    private var currentMode: String?
     @Published private(set) var cycleTimeMillis: UInt32?
     @Published private(set) var alerts: [AlertEvent] = []
     @Published private(set) var latestAlert: AlertEvent?
@@ -226,7 +230,7 @@ final class AnnunciatorViewModel: ObservableObject {
             stationsHeard += 1
 
             let newAlerts = engine.process(decode)
-            entries.append(DecodeEntry(decode: decode, alert: newAlerts.first, worked: engine.workedInfo(for: decode)))
+            entries.append(DecodeEntry(decode: decode, alert: newAlerts.first, worked: workedInfo(for: decode)))
             trimIfNeeded(&entries)
             // Skip WSJT-X's re-deliveries of a decode. One box per calling station: a later message
             // from the same callsign (report, then RR73) updates its box in place.
@@ -262,10 +266,17 @@ final class AnnunciatorViewModel: ObservableObject {
 
         case let .status(status):
             responders[status.id] = respond
+            currentBand = Band.name(forFrequencyHz: status.dialFrequencyHz)
+            currentMode = status.mode
 
         case .close, .wsprDecode, .loggedADIF, .unsupported:
             break
         }
+    }
+
+    private func workedInfo(for decode: WSJTXDecode) -> WorkedInfo? {
+        guard let currentBand, let currentMode else { return nil }
+        return engine.workedInfo(for: decode, band: currentBand, mode: currentMode)
     }
 
     private func trimIfNeeded<T>(_ array: inout [T], newestFirst: Bool = false) {
