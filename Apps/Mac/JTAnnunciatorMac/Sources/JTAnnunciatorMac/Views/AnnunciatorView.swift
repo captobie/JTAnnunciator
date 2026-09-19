@@ -153,14 +153,15 @@ private struct DecodePane: View {
 
 /// A single decode in a rectangular box: the calling station's callsign and its state/province
 /// (or country), centered.
-/// Everything else about the decode is in the hover tooltip. Alert-matching decodes get a
-/// colored fill and border.
+/// Everything else about the decode is in the hover tooltip. CQ callers and wanted stations are
+/// drawn as lit annunciator lamps (see `LampLens`).
 private struct DecodeBox: View {
     let entry: DecodeEntry
     let record: CallbookRecord?
 
     private var decode: WSJTXDecode { entry.decode }
-    private var tint: Color? { entry.alert.map(ColorCoding.color) }
+    private var lamp: Lamp? { ColorCoding.lamp(for: entry) }
+    private var worked: Bool { entry.worked != nil }
 
     var body: some View {
         VStack(spacing: 2) {
@@ -168,22 +169,31 @@ private struct DecodeBox: View {
                 .font(.system(.title3, design: .monospaced).weight(.bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .foregroundStyle(entry.worked == nil ? .primary : .tertiary)
+                .foregroundStyle(lamp.map { AnyShapeStyle($0.legend.opacity(worked ? 0.45 : 1)) }
+                    ?? AnyShapeStyle(worked ? .tertiary : .primary))
             if let region {
                 Text(region)
                     .font(.callout)
-                    .foregroundStyle(entry.worked == nil ? .secondary : .tertiary)
+                    .foregroundStyle(lamp.map { AnyShapeStyle($0.legend.opacity(worked ? 0.4 : 0.8)) }
+                        ?? AnyShapeStyle(worked ? .tertiary : .secondary))
                     .lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity, minHeight: 58, alignment: .center)
         .padding(8)
-        .background((tint ?? Color.secondary).opacity(tint == nil ? 0.08 : 0.2), in: RoundedRectangle(cornerRadius: 4))
-        .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(tint ?? Color.secondary.opacity(0.35), lineWidth: tint == nil ? 1 : 2)
-        )
+        .background { boxBackground }
         .help(hoverText)
+    }
+
+    @ViewBuilder
+    private var boxBackground: some View {
+        if let lamp {
+            LampLens(lamp: lamp)
+        } else {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.secondary.opacity(0.08))
+                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.secondary.opacity(0.35), lineWidth: 1))
+        }
     }
 
     /// Second line: the state or province when the callbook supplied one, otherwise the country.
@@ -222,5 +232,31 @@ private struct DecodeBox: View {
         }
         lines.append("Double-click to reply in WSJT-X")
         return lines.joined(separator: "\n")
+    }
+}
+
+/// An annunciator-panel lamp: a dark bezel around a translucent lens lit from behind, brightest
+/// at the center where the "bulb" is, with a soft glow spilling past the bezel.
+private struct LampLens: View {
+    let lamp: Lamp
+    private let shape = RoundedRectangle(cornerRadius: 4)
+
+    var body: some View {
+        shape
+            .fill(RadialGradient(colors: [lamp.center, lamp.edge], center: .center, startRadius: 4, endRadius: 115))
+            .overlay {
+                // Lens sheen: light catching the upper half of the plastic.
+                shape.fill(LinearGradient(
+                    colors: [.white.opacity(0.22), .white.opacity(0)], startPoint: .top, endPoint: .center
+                ))
+            }
+            .overlay {
+                // Recessed look: shadow falling inward from the bezel.
+                shape.stroke(Color.black.opacity(0.45), lineWidth: 8)
+                    .blur(radius: 4)
+                    .clipShape(shape)
+            }
+            .overlay { shape.strokeBorder(Color(white: 0.08), lineWidth: 3) }
+            .shadow(color: lamp.glow.opacity(0.55), radius: 9)
     }
 }
