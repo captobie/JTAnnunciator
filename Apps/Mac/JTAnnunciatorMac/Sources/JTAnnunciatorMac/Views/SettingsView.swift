@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import JTAnnunciatorCore
 
 struct SettingsView: View {
     @ObservedObject var viewModel: AnnunciatorViewModel
@@ -12,6 +13,7 @@ struct SettingsView: View {
     @State private var myCallsign: String = ""
     @State private var myGrid: String = ""
     @State private var clearsOnNewCycle: Bool = true
+    @State private var logbooks: [LogbookConnection] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -126,11 +128,52 @@ struct SettingsView: View {
             }
 
             Section("Log Connections") {
-                Text("Log program connections will be added here.")
-                    .foregroundStyle(.secondary)
+                if logbooks.isEmpty {
+                    Text("No logs connected. Add your logging program to see stations you've already worked marked in the decode list.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                ForEach($logbooks) { $logbook in
+                    logbookRow($logbook)
+                }
+                Menu("Add Log…") {
+                    ForEach(LogbookKind.allCases, id: \.self) { kind in
+                        Button(kind.displayName) { addLogbook(kind) }
+                    }
+                }
+                .fixedSize()
             }
         }
         .padding(8)
+    }
+
+    private func logbookRow(_ logbook: Binding<LogbookConnection>) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Toggle(logbook.wrappedValue.kind.displayName, isOn: logbook.isEnabled)
+                    .fontWeight(.medium)
+                Spacer()
+                Button("Choose…") { chooseLogbookFile(logbook) }
+                Button {
+                    logbooks.removeAll { $0.id == logbook.wrappedValue.id }
+                } label: {
+                    Image(systemName: "minus.circle")
+                }
+                .buttonStyle(.borderless)
+                .help("Remove this log connection")
+            }
+            Text(logbook.wrappedValue.path.isEmpty ? "No file selected" : logbook.wrappedValue.path)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.head)
+            if let status = viewModel.logbookStatuses[logbook.wrappedValue.id] {
+                Text(status)
+                    .font(.caption)
+                    .foregroundStyle(status.hasSuffix("loaded") ? .green : .red)
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     private var filtersTab: some View {
@@ -160,6 +203,7 @@ struct SettingsView: View {
         myCallsign = viewModel.myCallsign
         myGrid = viewModel.myGrid
         clearsOnNewCycle = viewModel.clearsOnNewCycle
+        logbooks = viewModel.logbookConnections
     }
 
     private func save() {
@@ -170,6 +214,7 @@ struct SettingsView: View {
         viewModel.myCallsign = myCallsign
         viewModel.myGrid = myGrid
         viewModel.clearsOnNewCycle = clearsOnNewCycle
+        viewModel.setLogbookConnections(logbooks)
         if ctyDatPath != (AppSettings.ctyDatPath ?? "") {
             AppSettings.ctyDatPath = ctyDatPath
             viewModel.reloadDXCCDatabase()
@@ -193,5 +238,39 @@ struct SettingsView: View {
         panel.message = "Choose a cty.dat DXCC country file"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         ctyDatPath = url.path
+    }
+
+    /// Adds a connection for `kind`, pre-filled with that program's usual log location if it
+    /// exists; otherwise asks the user to pick the file.
+    private func addLogbook(_ kind: LogbookKind) {
+        let defaultPath = kind.defaultRelativePath.map {
+            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent($0).path
+        }
+        let exists = defaultPath.map { FileManager.default.fileExists(atPath: $0) } ?? false
+        var connection = LogbookConnection(kind: kind, path: exists ? defaultPath ?? "" : "")
+        if !exists {
+            guard let picked = pickLogbookFile(for: kind) else { return }
+            connection.path = picked
+        }
+        logbooks.append(connection)
+    }
+
+    private func chooseLogbookFile(_ logbook: Binding<LogbookConnection>) {
+        if let picked = pickLogbookFile(for: logbook.wrappedValue.kind) {
+            logbook.wrappedValue.path = picked
+        }
+    }
+
+    private func pickLogbookFile(for kind: LogbookKind) -> String? {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose your \(kind.displayName) log file"
+        if let relative = kind.defaultRelativePath {
+            panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(relative).deletingLastPathComponent()
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        return url.path
     }
 }

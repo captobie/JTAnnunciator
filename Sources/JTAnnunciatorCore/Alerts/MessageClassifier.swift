@@ -16,6 +16,14 @@ public enum MessageClassifier {
         return first == mine
     }
 
+    /// The station that transmitted the message: the callsign after "CQ [modifier]", or the
+    /// second callsign of a directed message ("K1ABC W9XYZ -12" → W9XYZ). `nil` if none found.
+    public static func senderCallsign(_ message: String) -> String? {
+        let bracketless = message.replacingOccurrences(of: "<", with: "").replacingOccurrences(of: ">", with: "")
+        let candidates = FT8MessageParser.candidateCallsigns(inMessage: bracketless)
+        return isCQ(message) ? candidates.first : candidates.last
+    }
+
     private static func tokens(_ message: String) -> [String] {
         message.split(separator: " ").map { normalize(String($0)) }
     }

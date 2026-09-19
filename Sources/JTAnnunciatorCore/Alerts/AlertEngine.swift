@@ -8,14 +8,50 @@ import Foundation
 /// simply hold a `var` of this, same pattern as `RigState` in the sibling FTX1Remote project.
 public struct AlertEngine {
     public var wantedList: WantedList
-    public var dxccLookup: DXCCLookup
+    public var dxccLookup: DXCCLookup {
+        didSet { rebuildLogbookDXCC() }
+    }
 
+    /// Callsigns/entities logged this session (from QSO Logged messages).
     public private(set) var workedCallsigns: Set<String> = []
     public private(set) var workedDXCCPrimaryPrefixes: Set<String> = []
+
+    /// Everything read from the user's logging programs, plus the entities those calls belong to.
+    public private(set) var logbook = WorkedLog()
+    private var logbookDXCCPrimaryPrefixes: Set<String> = []
 
     public init(wantedList: WantedList, dxccLookup: DXCCLookup) {
         self.wantedList = wantedList
         self.dxccLookup = dxccLookup
+    }
+
+    /// Replaces the logbook-derived history (e.g. after re-reading the log files).
+    public mutating func setLogbook(_ log: WorkedLog) {
+        logbook = log
+        rebuildLogbookDXCC()
+    }
+
+    private mutating func rebuildLogbookDXCC() {
+        logbookDXCCPrimaryPrefixes = Set(logbook.callsigns.compactMap { dxccLookup.entity(forCallsign: $0)?.primaryPrefix })
+    }
+
+    /// True if `callsign` was worked this session or appears in the logbook.
+    public func hasWorked(_ callsign: String) -> Bool {
+        let call = callsign.uppercased()
+        return workedCallsigns.contains(call) || logbook.contains(call)
+    }
+
+    private func hasWorkedDXCC(_ primaryPrefix: String) -> Bool {
+        workedDXCCPrimaryPrefixes.contains(primaryPrefix) || logbookDXCCPrimaryPrefixes.contains(primaryPrefix)
+    }
+
+    /// What's known about the station that sent `decode`, or `nil` if it has never been worked.
+    /// Bands/modes come from the logbook; a station worked only this session has none listed.
+    public func workedInfo(for decode: WSJTXDecode) -> WorkedInfo? {
+        guard let call = MessageClassifier.senderCallsign(decode.message) else { return nil }
+        if let info = logbook.info(for: call) { return info }
+        guard workedCallsigns.contains(call) else { return nil }
+        return WorkedInfo(callsign: call, bands: [], modes: [], qsoCount: 1, lastWorked: nil)
     }
 
     /// Records a completed, logged QSO so future alerts for that callsign/entity can be marked
@@ -45,7 +81,7 @@ public struct AlertEngine {
                 events.append(
                     AlertEvent(
                         callsign: rawCallsign, reason: .wantedCallsign, decode: decode,
-                        alreadyWorked: workedCallsigns.contains(rawCallsign)
+                        alreadyWorked: hasWorked(rawCallsign)
                     )
                 )
                 continue
@@ -60,7 +96,7 @@ public struct AlertEngine {
                     callsign: rawCallsign,
                     reason: .wantedDXCC(entityName: entity.name, primaryPrefix: entity.primaryPrefix),
                     decode: decode,
-                    alreadyWorked: workedDXCCPrimaryPrefixes.contains(entity.primaryPrefix)
+                    alreadyWorked: hasWorkedDXCC(entity.primaryPrefix)
                 )
             )
         }

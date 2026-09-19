@@ -14,6 +14,7 @@ enum AppSettings {
         static let myCallsign = "com.jtannunciator.myCallsign"
         static let myGrid = "com.jtannunciator.myGrid"
         static let clearsOnNewCycle = "com.jtannunciator.clearsOnNewCycle"
+        static let logbookConnections = "com.jtannunciator.logbookConnections"
     }
 
     static func loadWantedList() -> WantedList? {
@@ -69,5 +70,17 @@ enum AppSettings {
     static var myGrid: String {
         get { UserDefaults.standard.string(forKey: Key.myGrid) ?? "" }
         set { UserDefaults.standard.set(newValue, forKey: Key.myGrid) }
+    }
+
+    /// The configured logging-program connections, one entry per program/file.
+    static var logbookConnections: [LogbookConnection] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: Key.logbookConnections) else { return [] }
+            return (try? JSONDecoder().decode([LogbookConnection].self, from: data)) ?? []
+        }
+        set {
+            guard let data = try? JSONEncoder().encode(newValue) else { return }
+            UserDefaults.standard.set(data, forKey: Key.logbookConnections)
+        }
     }
 }

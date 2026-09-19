@@ -45,6 +45,11 @@ struct AnnunciatorView: View {
             Text("DXCC entities loaded: \(viewModel.dxccDatabaseEntityCount)")
                 .foregroundStyle(.secondary)
 
+            if viewModel.logbookCallsignCount > 0 {
+                Text("Log: \(viewModel.logbookCallsignCount.formatted()) stations")
+                    .foregroundStyle(.secondary)
+            }
+
             if let status = viewModel.replyStatus {
                 Label(status, systemImage: "paperplane")
                     .foregroundStyle(.blue)
@@ -147,6 +152,12 @@ private struct DecodeBox: View {
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(tint ?? .primary)
             }
+
+            if let worked = entry.worked {
+                Text(ColorCoding.workedBadgeText(for: worked))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.green)
+            }
         }
         .padding(8)
         .frame(maxWidth: .infinity, minHeight: 58, alignment: .topLeading)
@@ -155,6 +166,7 @@ private struct DecodeBox: View {
             RoundedRectangle(cornerRadius: 4)
                 .strokeBorder(tint ?? Color.secondary.opacity(0.35), lineWidth: tint == nil ? 1 : 2)
         )
-        .help("Double-click to reply in WSJT-X")
+        .help(entry.worked.map { ColorCoding.workedDescription(for: $0) + "\nDouble-click to reply in WSJT-X" }
+            ?? "Double-click to reply in WSJT-X")
     }
 }

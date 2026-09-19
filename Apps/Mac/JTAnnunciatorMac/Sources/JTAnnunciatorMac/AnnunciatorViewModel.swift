@@ -7,6 +7,8 @@ struct DecodeEntry: Identifiable {
     let id = UUID()
     let decode: WSJTXDecode
     var alert: AlertEvent?
+    /// Set when the sending station appears in a connected logbook (or was logged this session).
+    var worked: WorkedInfo?
 }
 
 @MainActor
@@ -24,6 +26,11 @@ final class AnnunciatorViewModel: ObservableObject {
     private static let log = Logger(subsystem: "com.jtannunciator", category: "reply")
     @Published private(set) var stationsHeard = 0
     @Published private(set) var dxccDatabaseEntityCount = 0
+    @Published private(set) var logbookConnections: [LogbookConnection] = AppSettings.logbookConnections
+    /// One human-readable line per connection ("1,481 QSOs" or the error), shown in Settings.
+    @Published private(set) var logbookStatuses: [UUID: String] = [:]
+    /// Distinct callsigns across all enabled logbooks.
+    @Published private(set) var logbookCallsignCount = 0
 
     /// When true (the default) the display clears as soon as a decode from a new cycle arrives.
     @Published var clearsOnNewCycle: Bool = AppSettings.clearsOnNewCycle {
@@ -59,6 +66,11 @@ final class AnnunciatorViewModel: ObservableObject {
 
     private var engine: AlertEngine
     private var listener: WSJTXUDPListener?
+    private var logbookWatcher: Task<Void, Never>?
+    /// Modification time of each logbook file as of its last read, so the watcher only re-reads
+    /// a log that actually changed (e.g. MacLoggerDX saved a new QSO).
+    private var logbookModificationDates: [UUID: Date] = [:]
+    private var logbookLoadGeneration = 0
     /// How to reach each WSJT-X instance (keyed by its client id), refreshed by every datagram it
     /// sends, so a reply always goes to the instance that produced the decode.
     private var responders: [String: WSJTXUDPListener.Responder] = [:]
@@ -84,6 +96,7 @@ final class AnnunciatorViewModel: ObservableObject {
         listener.start()
         self.listener = listener
         isListening = true
+        startWatchingLogbooks()
     }
 
     func stop() {
@@ -91,6 +104,72 @@ final class AnnunciatorViewModel: ObservableObject {
         listener = nil
         responders.removeAll()
         isListening = false
+        logbookWatcher?.cancel()
+        logbookWatcher = nil
+    }
+
+    /// Saves the logbook connections and re-reads every enabled log.
+    func setLogbookConnections(_ connections: [LogbookConnection]) {
+        guard connections != logbookConnections else { return }
+        logbookConnections = connections
+        AppSettings.logbookConnections = connections
+        reloadLogbooks()
+    }
+
+    /// Re-reads all enabled logbooks off the main thread, then swaps the result into the engine.
+    func reloadLogbooks() {
+        logbookLoadGeneration += 1
+        let generation = logbookLoadGeneration
+        let connections = logbookConnections.filter(\.isEnabled)
+
+        Task {
+            let results = await Task.detached(priority: .utility) {
+                connections.map { connection -> (LogbookConnection, Result<[LogbookQSO], Error>, Date?) in
+                    let modified = try? FileManager.default.attributesOfItem(atPath: connection.path)[.modificationDate] as? Date
+                    return (connection, Result { try connection.readQSOs() }, modified)
+                }
+            }.value
+
+            // A newer reload (or a settings change) started while this one ran; drop this result.
+            guard generation == logbookLoadGeneration else { return }
+
+            var combined = WorkedLog()
+            var statuses: [UUID: String] = [:]
+            var modificationDates: [UUID: Date] = [:]
+            for (connection, result, modified) in results {
+                if let modified { modificationDates[connection.id] = modified }
+                switch result {
+                case let .success(qsos):
+                    combined.merge(WorkedLog(qsos: qsos))
+                    statuses[connection.id] = "\(qsos.count.formatted()) QSOs loaded"
+                case let .failure(error):
+                    statuses[connection.id] = error.localizedDescription
+                }
+            }
+            engine.setLogbook(combined)
+            logbookCallsignCount = combined.callsignCount
+            logbookStatuses = statuses
+            logbookModificationDates = modificationDates
+        }
+    }
+
+    private func startWatchingLogbooks() {
+        guard logbookWatcher == nil else { return }
+        reloadLogbooks()
+        logbookWatcher = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
+                self?.reloadLogbooksIfChanged()
+            }
+        }
+    }
+
+    private func reloadLogbooksIfChanged() {
+        let changed = logbookConnections.filter(\.isEnabled).contains { connection in
+            let modified = try? FileManager.default.attributesOfItem(atPath: connection.path)[.modificationDate] as? Date
+            return modified != logbookModificationDates[connection.id]
+        }
+        if changed { reloadLogbooks() }
     }
 
     /// Does what double-clicking `decode` in WSJT-X would: selects the station and queues the
@@ -139,7 +218,7 @@ final class AnnunciatorViewModel: ObservableObject {
             stationsHeard += 1
 
             let newAlerts = engine.process(decode)
-            entries.append(DecodeEntry(decode: decode, alert: newAlerts.first))
+            entries.append(DecodeEntry(decode: decode, alert: newAlerts.first, worked: engine.workedInfo(for: decode)))
             trimIfNeeded(&entries)
             guard !newAlerts.isEmpty else { return }
             alerts.insert(contentsOf: newAlerts, at: 0)
