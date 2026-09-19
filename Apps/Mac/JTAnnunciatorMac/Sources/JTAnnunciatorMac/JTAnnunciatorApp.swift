@@ -23,7 +23,7 @@ struct JTAnnunciatorApp: App {
 
         Settings {
             SettingsView(viewModel: viewModel)
-                .frame(width: 480, height: 360)
+                .frame(minWidth: 480, idealWidth: 520, maxWidth: .infinity, minHeight: 420, idealHeight: 480, maxHeight: .infinity)
         }
     }
 }
