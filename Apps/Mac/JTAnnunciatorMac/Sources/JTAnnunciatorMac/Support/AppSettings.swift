@@ -17,7 +17,7 @@ enum AppSettings {
         static let logbookConnections = "com.jtannunciator.logbookConnections"
         static let qrzEnabled = "com.jtannunciator.qrzEnabled"
         static let qrzUsername = "com.jtannunciator.qrzUsername"
-        static let qrzPasswordAccount = "qrzPassword"
+        static let qrzPassword = "com.jtannunciator.qrzPassword"
     }
 
     static func loadWantedList() -> WantedList? {
@@ -97,9 +97,8 @@ enum AppSettings {
         set { UserDefaults.standard.set(newValue, forKey: Key.qrzUsername) }
     }
 
-    /// Kept in the Keychain rather than UserDefaults.
     static var qrzPassword: String {
-        get { KeychainStore.string(for: Key.qrzPasswordAccount) ?? "" }
-        set { KeychainStore.set(newValue, for: Key.qrzPasswordAccount) }
+        get { UserDefaults.standard.string(forKey: Key.qrzPassword) ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: Key.qrzPassword) }
     }
 }
