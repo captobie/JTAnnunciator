@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var multicastText: String = ""
     @State private var alertSoundEnabled: Bool = true
     @State private var myCallsign: String = ""
+    @State private var myGrid: String = ""
     @State private var clearsOnNewCycle: Bool = true
 
     var body: some View {
@@ -56,6 +57,16 @@ struct SettingsView: View {
                         .onChange(of: myCallsign) { newValue in
                             let upper = newValue.uppercased()
                             if upper != newValue { myCallsign = upper }
+                        }
+                }
+                HStack {
+                    Text("My Grid")
+                    TextField("", text: $myGrid)
+                        .frame(width: 180)
+                        .autocorrectionDisabled()
+                        .onChange(of: myGrid) { newValue in
+                            let formatted = Self.formatGrid(newValue)
+                            if formatted != newValue { myGrid = formatted }
                         }
                 }
             }
@@ -132,12 +143,22 @@ struct SettingsView: View {
         .padding(8)
     }
 
+    /// Maidenhead convention: field and square uppercase/digits (FN42), subsquare lowercase (ab).
+    /// Capped at 8 characters (extended-square precision).
+    private static func formatGrid(_ text: String) -> String {
+        let trimmed = text.filter { !$0.isWhitespace }.prefix(8)
+        return String(trimmed.enumerated().map { index, char in
+            index < 4 ? Character(char.uppercased()) : Character(char.lowercased())
+        })
+    }
+
     private func loadDrafts() {
         ctyDatPath = AppSettings.ctyDatPath ?? ""
         udpPortText = String(AppSettings.udpPort)
         multicastText = AppSettings.multicastAddress
         alertSoundEnabled = AppSettings.alertSoundEnabled
         myCallsign = viewModel.myCallsign
+        myGrid = viewModel.myGrid
         clearsOnNewCycle = viewModel.clearsOnNewCycle
     }
 
@@ -147,6 +168,7 @@ struct SettingsView: View {
         AppSettings.multicastAddress = multicastText
         AppSettings.alertSoundEnabled = alertSoundEnabled
         viewModel.myCallsign = myCallsign
+        viewModel.myGrid = myGrid
         viewModel.clearsOnNewCycle = clearsOnNewCycle
         if ctyDatPath != (AppSettings.ctyDatPath ?? "") {
             AppSettings.ctyDatPath = ctyDatPath

@@ -12,6 +12,7 @@ enum AppSettings {
         static let udpPort = "com.jtannunciator.udpPort"
         static let alertSoundEnabled = "com.jtannunciator.alertSoundEnabled"
         static let myCallsign = "com.jtannunciator.myCallsign"
+        static let myGrid = "com.jtannunciator.myGrid"
         static let clearsOnNewCycle = "com.jtannunciator.clearsOnNewCycle"
     }
 
@@ -62,5 +63,11 @@ enum AppSettings {
     static var myCallsign: String {
         get { UserDefaults.standard.string(forKey: Key.myCallsign) ?? "" }
         set { UserDefaults.standard.set(newValue, forKey: Key.myCallsign) }
+    }
+
+    /// The user's own Maidenhead grid locator (e.g. "FN42ab").
+    static var myGrid: String {
+        get { UserDefaults.standard.string(forKey: Key.myGrid) ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: Key.myGrid) }
     }
 }

@@ -30,6 +30,10 @@ final class AnnunciatorViewModel: ObservableObject {
         didSet { AppSettings.myCallsign = myCallsign }
     }
 
+    @Published var myGrid: String = AppSettings.myGrid {
+        didSet { AppSettings.myGrid = myGrid }
+    }
+
     var callingMeEntries: [DecodeEntry] {
         entries.filter { MessageClassifier.isDirected($0.decode.message, to: myCallsign) }
     }
