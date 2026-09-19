@@ -211,3 +211,29 @@ private extension QDataStreamWriter {
         writeUInt8(timeSpec)
     }
 }
+
+final class WSJTXMessageEncoderTests: XCTestCase {
+    func testEncodeReplyLayout() throws {
+        let decode = WSJTXDecode(
+            id: "WSJT-X", isNew: true, timeMillisSinceMidnightUTC: 45_015_000, snr: -12,
+            deltaTimeSeconds: 0.3, deltaFrequencyHz: 1234, mode: "~", message: "CQ K1ABC FN42",
+            lowConfidence: false, offAir: false
+        )
+        let data = WSJTXMessageEncoder.encodeReply(for: decode)
+
+        var reader = QDataStreamReader(data)
+        XCTAssertEqual(try reader.readUInt32(), WSJTXMessageDecoder.magicNumber)
+        _ = try reader.readUInt32() // schema
+        XCTAssertEqual(try reader.readUInt32(), WSJTXMessageType.reply.rawValue)
+        XCTAssertEqual(try reader.readQString(), "WSJT-X")
+        XCTAssertEqual(try reader.readQTimeMillisSinceMidnight(), 45_015_000)
+        XCTAssertEqual(try reader.readInt32(), -12)
+        XCTAssertEqual(try reader.readDouble(), 0.3)
+        XCTAssertEqual(try reader.readUInt32(), 1234)
+        XCTAssertEqual(try reader.readQString(), "~")
+        XCTAssertEqual(try reader.readQString(), "CQ K1ABC FN42")
+        XCTAssertEqual(try reader.readBool(), false)
+        XCTAssertEqual(try reader.readUInt8(), 0)
+        XCTAssertTrue(reader.isAtEnd)
+    }
+}

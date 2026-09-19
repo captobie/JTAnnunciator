@@ -165,9 +165,9 @@ public enum WSJTXMessageDecoder {
     }
 }
 
-/// Encodes the one message type this app sends back to WSJT-X in v1: a Heartbeat, which both
-/// announces us as a connected UDP client and lets WSJT-X's "UDP Server" list show us.
-enum WSJTXMessageEncoder {
+/// Encodes the messages this app sends back to WSJT-X: a Heartbeat (announces us as a connected
+/// UDP client) and a Reply (the same action as double-clicking a decode in WSJT-X itself).
+public enum WSJTXMessageEncoder {
     /// The schema number to declare on outgoing datagrams. WSJT-X accepts 2 or 3; 2 (Qt_5_2)
     /// is used here since it's the smaller/older-compatible field set actually needed for a
     /// heartbeat.
@@ -182,6 +182,29 @@ enum WSJTXMessageEncoder {
         writer.writeUInt32(maximumSchemaNumber)
         writer.writeQString(version)
         writer.writeQString(revision)
+        return writer.data
+    }
+
+    /// A Reply asks WSJT-X to act as if the user had double-clicked `decode` in its own window:
+    /// it sets the DX call/grid, generates the standard messages (for a CQ, Tx1 is
+    /// `<DX call> <my call> <my grid>`), and enables Tx if "Double-click on call sets Tx Enable"
+    /// is on in WSJT-X's Settings → General. The fields must match the decode as WSJT-X sent it,
+    /// since WSJT-X locates the line in its decode list from them. `id` is the client id from the
+    /// decode, so the message reaches the right WSJT-X instance.
+    public static func encodeReply(for decode: WSJTXDecode, modifiers: UInt8 = 0) -> Data {
+        var writer = QDataStreamWriter()
+        writer.writeUInt32(WSJTXMessageDecoder.magicNumber)
+        writer.writeUInt32(schemaNumber)
+        writer.writeUInt32(WSJTXMessageType.reply.rawValue)
+        writer.writeQString(decode.id)
+        writer.writeUInt32(decode.timeMillisSinceMidnightUTC ?? 0xFFFF_FFFF)
+        writer.writeInt32(decode.snr)
+        writer.writeDouble(decode.deltaTimeSeconds)
+        writer.writeUInt32(decode.deltaFrequencyHz)
+        writer.writeQString(decode.mode)
+        writer.writeQString(decode.message)
+        writer.writeBool(decode.lowConfidence)
+        writer.writeUInt8(modifiers)
         return writer.data
     }
 }

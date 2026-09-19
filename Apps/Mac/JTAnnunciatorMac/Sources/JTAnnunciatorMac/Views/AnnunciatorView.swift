@@ -13,6 +13,8 @@ struct AnnunciatorView: View {
                 decodeList
                 if let latest = viewModel.latestAlert {
                     AlertBannerView(alert: latest)
+                        .onTapGesture(count: 2) { viewModel.reply(to: latest.decode) }
+                        .help("Double-click to reply in WSJT-X")
                         .padding(.top, 8)
                         .transition(.move(edge: .top).combined(with: .opacity))
                         .id(latest.id)
@@ -43,6 +45,12 @@ struct AnnunciatorView: View {
             Text("DXCC entities loaded: \(viewModel.dxccDatabaseEntityCount)")
                 .foregroundStyle(.secondary)
 
+            if let status = viewModel.replyStatus {
+                Label(status, systemImage: "paperplane")
+                    .foregroundStyle(.blue)
+                    .lineLimit(1)
+            }
+
             if let error = viewModel.lastErrorDescription {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)
@@ -57,16 +65,17 @@ struct AnnunciatorView: View {
 
     private var decodeList: some View {
         VSplitView {
-            DecodePane(title: "All Decodes", entries: viewModel.entries, emptyText: "Waiting for decodes…")
+            DecodePane(title: "All Decodes", entries: viewModel.entries, emptyText: "Waiting for decodes…", onReply: viewModel.reply)
                 .frame(minHeight: 120)
             HSplitView {
                 DecodePane(
                     title: viewModel.myCallsign.isEmpty ? "Calling Me" : "Calling \(viewModel.myCallsign)",
                     entries: viewModel.callingMeEntries,
-                    emptyText: viewModel.myCallsign.isEmpty ? "Set your callsign in Settings" : "No one calling you"
+                    emptyText: viewModel.myCallsign.isEmpty ? "Set your callsign in Settings" : "No one calling you",
+                    onReply: viewModel.reply
                 )
                 .frame(minWidth: 200)
-                DecodePane(title: "CQ", entries: viewModel.cqEntries, emptyText: "No CQs")
+                DecodePane(title: "CQ", entries: viewModel.cqEntries, emptyText: "No CQs", onReply: viewModel.reply)
                     .frame(minWidth: 200)
             }
             .frame(minHeight: 120)
@@ -79,6 +88,7 @@ private struct DecodePane: View {
     let title: String
     let entries: [DecodeEntry]
     let emptyText: String
+    let onReply: (WSJTXDecode) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -94,6 +104,8 @@ private struct DecodePane: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 10)], spacing: 10) {
                     ForEach(entries) { entry in
                         DecodeBox(entry: entry)
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) { onReply(entry.decode) }
                     }
                 }
                 .padding(12)
@@ -143,5 +155,6 @@ private struct DecodeBox: View {
             RoundedRectangle(cornerRadius: 4)
                 .strokeBorder(tint ?? Color.secondary.opacity(0.35), lineWidth: tint == nil ? 1 : 2)
         )
+        .help("Double-click to reply in WSJT-X")
     }
 }

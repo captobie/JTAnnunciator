@@ -13,7 +13,10 @@ import JTAnnunciatorCore
 /// validation-status note; this is the first thing to sanity-check against a real running
 /// WSJT-X instance.
 final class WSJTXUDPListener {
-    var onMessage: ((WSJTXMessage) -> Void)?
+    /// Sends a datagram back to whichever WSJT-X instance sent the message it accompanies.
+    typealias Responder = (Data) -> Void
+
+    var onMessage: ((WSJTXMessage, @escaping Responder) -> Void)?
     var onError: ((Swift.Error) -> Void)?
 
     enum ListenerError: Swift.Error {
@@ -102,10 +105,32 @@ final class WSJTXUDPListener {
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         source.setEventHandler { [weak self] in
             var buffer = [UInt8](repeating: 0, count: 65535)
-            let n = recv(fd, &buffer, buffer.count, 0)
+            var sender = sockaddr_in()
+            var senderLength = socklen_t(MemoryLayout<sockaddr_in>.size)
+            let n = withUnsafeMutablePointer(to: &sender) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    recvfrom(fd, &buffer, buffer.count, 0, $0, &senderLength)
+                }
+            }
             guard n > 0, let self else { return }
+            let senderAddress = sender
+            // Reply from the same socket, to the sender's own (ephemeral) port: that is where
+            // WSJT-X reads inbound messages, not the shared multicast group/port.
+            let respond: Responder = { [weak self] data in
+                guard let self, self.readSource != nil else { return }
+                var destination = senderAddress
+                let sent = data.withUnsafeBytes { bytes in
+                    withUnsafePointer(to: &destination) {
+                        $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                            sendto(fd, bytes.baseAddress, bytes.count, 0, $0,
+                                   socklen_t(MemoryLayout<sockaddr_in>.size))
+                        }
+                    }
+                }
+                if sent < 0 { self.fail("sendto()") }
+            }
             do {
-                self.onMessage?(try WSJTXMessageDecoder.decode(Data(buffer[0..<n])))
+                self.onMessage?(try WSJTXMessageDecoder.decode(Data(buffer[0..<n])), respond)
             } catch {
                 self.onError?(error)
             }
@@ -152,7 +177,12 @@ final class WSJTXUDPListener {
             if let data, !data.isEmpty {
                 do {
                     let message = try WSJTXMessageDecoder.decode(data)
-                    self.onMessage?(message)
+                    let respond: Responder = { [weak self] reply in
+                        connection.send(content: reply, completion: .contentProcessed { error in
+                            if let error { self?.onError?(error) }
+                        })
+                    }
+                    self.onMessage?(message, respond)
                 } catch {
                     self.onError?(error)
                 }
