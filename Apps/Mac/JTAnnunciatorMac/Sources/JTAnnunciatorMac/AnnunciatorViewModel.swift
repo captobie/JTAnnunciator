@@ -7,6 +7,9 @@ struct DecodeEntry: Identifiable {
     let id = UUID()
     let decode: WSJTXDecode
     var alert: AlertEvent?
+    /// The transmitting station's callsign, and its DXCC country when a cty.dat is loaded.
+    var callsign: String?
+    var country: String?
     /// Set when the sending station appears in a connected logbook (or was logged this session).
     var worked: WorkedInfo?
 }
@@ -230,7 +233,13 @@ final class AnnunciatorViewModel: ObservableObject {
             stationsHeard += 1
 
             let newAlerts = engine.process(decode)
-            entries.append(DecodeEntry(decode: decode, alert: newAlerts.first, worked: workedInfo(for: decode)))
+            let callsign = MessageClassifier.senderCallsign(decode.message)
+            entries.append(DecodeEntry(
+                decode: decode, alert: newAlerts.first,
+                callsign: callsign,
+                country: callsign.flatMap { engine.dxccLookup.entity(forCallsign: $0)?.name },
+                worked: workedInfo(for: decode)
+            ))
             trimIfNeeded(&entries)
             // Skip WSJT-X's re-deliveries of a decode. One box per calling station: a later message
             // from the same callsign (report, then RR73) updates its box in place.

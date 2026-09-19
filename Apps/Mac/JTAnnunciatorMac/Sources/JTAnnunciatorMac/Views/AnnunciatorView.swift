@@ -122,7 +122,7 @@ private struct DecodePane: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 10)], spacing: 10) {
                     ForEach(entries) { entry in
-                        DecodeBox(entry: entry, showsTime: clearActions != nil)
+                        DecodeBox(entry: entry)
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { onReply(entry.decode) }
                             .contextMenu {
@@ -143,58 +143,62 @@ private struct DecodePane: View {
     }
 }
 
-/// A single decode in a rectangular box; alert-matching decodes get a colored fill and border.
+/// A single decode in a rectangular box: the calling station's callsign and country, centered.
+/// Everything else about the decode is in the hover tooltip. Alert-matching decodes get a
+/// colored fill and border.
 private struct DecodeBox: View {
     let entry: DecodeEntry
-    var showsTime = false
 
     private var decode: WSJTXDecode { entry.decode }
-    private var timeLabel: String? {
-        guard let millis = decode.timeMillisSinceMidnightUTC else { return nil }
-        let seconds = millis / 1000
-        return String(format: "%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60)
-    }
     private var tint: Color? { entry.alert.map(ColorCoding.color) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(decode.message)
-                .font(.system(.body, design: .monospaced).weight(entry.alert == nil ? .regular : .bold))
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            HStack(spacing: 8) {
-                if showsTime, let time = timeLabel {
-                    Text(time)
-                }
-                Text(String(format: "%+d dB", decode.snr))
-                Text(String(format: "DT %.1f", decode.deltaTimeSeconds))
-                Text("\(decode.deltaFrequencyHz) Hz")
-                Spacer(minLength: 0)
-            }
-            .font(.caption.monospacedDigit())
-            .foregroundStyle(.secondary)
-
-            if let alert = entry.alert {
-                Text(ColorCoding.badgeText(for: alert.reason))
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(tint ?? .primary)
-            }
-
-            if let worked = entry.worked {
-                Text(ColorCoding.workedBadgeText(for: worked))
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.green)
+        VStack(spacing: 2) {
+            Text(entry.callsign ?? decode.message)
+                .font(.system(.title3, design: .monospaced).weight(.bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .foregroundStyle(entry.worked == nil ? .primary : .tertiary)
+            if let country = entry.country {
+                Text(country)
+                    .font(.callout)
+                    .foregroundStyle(entry.worked == nil ? .secondary : .tertiary)
+                    .lineLimit(1)
             }
         }
+        .frame(maxWidth: .infinity, minHeight: 58, alignment: .center)
         .padding(8)
-        .frame(maxWidth: .infinity, minHeight: 58, alignment: .topLeading)
         .background((tint ?? Color.secondary).opacity(tint == nil ? 0.08 : 0.2), in: RoundedRectangle(cornerRadius: 4))
         .overlay(
             RoundedRectangle(cornerRadius: 4)
                 .strokeBorder(tint ?? Color.secondary.opacity(0.35), lineWidth: tint == nil ? 1 : 2)
         )
-        .help(entry.worked.map { ColorCoding.workedDescription(for: $0) + "\nDouble-click to reply in WSJT-X" }
-            ?? "Double-click to reply in WSJT-X")
+        .help(hoverText)
+    }
+
+    /// All the detail for this decode, shown on hover.
+    private var hoverText: String {
+        var lines = [decode.message]
+        var detail: [String] = []
+        if let millis = decode.timeMillisSinceMidnightUTC {
+            let seconds = millis / 1000
+            detail.append(String(format: "%02d:%02d:%02d UTC", seconds / 3600, (seconds % 3600) / 60, seconds % 60))
+        }
+        detail.append(String(format: "%+d dB", decode.snr))
+        detail.append(String(format: "DT %.1f", decode.deltaTimeSeconds))
+        detail.append("\(decode.deltaFrequencyHz) Hz")
+        lines.append(detail.joined(separator: "  "))
+        if let country = entry.country {
+            lines.append(country)
+        }
+        if let alert = entry.alert {
+            lines.append(ColorCoding.badgeText(for: alert.reason))
+        }
+        if let worked = entry.worked {
+            lines.append(ColorCoding.workedBadgeText(for: worked))
+            lines.append(ColorCoding.workedDescription(for: worked))
+        }
+        lines.append("Double-click to reply in WSJT-X")
+        return lines.joined(separator: "\n")
     }
 }
