@@ -20,6 +20,16 @@ struct JTAnnunciatorApp: App {
                 .onDisappear { viewModel.stop() }
         }
         .windowResizability(.contentSize)
+        .commands {
+            CommandGroup(after: .toolbar) {
+                ColorKeyCommand()
+            }
+        }
+
+        Window("Color Key", id: ColorKeyView.windowID) {
+            ColorKeyView()
+        }
+        .windowResizability(.contentSize)
 
         Settings {
             SettingsView(viewModel: viewModel)

@@ -129,7 +129,7 @@ private struct DecodePane: View {
             .padding(.vertical, 6)
             Divider()
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 10)], spacing: 10) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 210), spacing: 10)], spacing: 10) {
                     ForEach(entries) { entry in
                         let record = entry.callsign.flatMap { callbook[$0] }
                         DecodeBox(entry: entry, record: record, newFlag: newFlag(entry, record))
@@ -250,7 +250,7 @@ private struct DecodeBox: View {
 
 /// An annunciator-panel lamp: a dark bezel around a translucent lens lit from behind, brightest
 /// at the center where the "bulb" is, with a soft glow spilling past the bezel.
-private struct LampLens: View {
+struct LampLens: View {
     let lamp: Lamp
     private let shape = RoundedRectangle(cornerRadius: 4)
 
