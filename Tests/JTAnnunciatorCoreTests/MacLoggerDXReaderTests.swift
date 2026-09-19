@@ -43,6 +43,23 @@ final class MacLoggerDXReaderTests: XCTestCase {
         XCTAssertNil(qsos[1].date)
     }
 
+    func testReadsStateColumnWhenPresent() throws {
+        var db: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(path, &db), SQLITE_OK)
+        defer { sqlite3_close(db) }
+        for sql in [
+            "CREATE TABLE qso_table_v008 (pk INTEGER PRIMARY KEY, call TEXT, band_tx TEXT, mode TEXT, qso_done REAL, state TEXT)",
+            "INSERT INTO qso_table_v008 (call, band_tx, mode, qso_done, state) VALUES ('W1AW', '20M', 'FT8', 1.0, 'CT')",
+            "INSERT INTO qso_table_v008 (call, band_tx, mode, qso_done, state) VALUES ('K1ABC', '20M', 'FT8', 1.0, NULL)",
+        ] {
+            XCTAssertEqual(sqlite3_exec(db, sql, nil, nil, nil), SQLITE_OK, sql)
+        }
+
+        let qsos = try MacLoggerDXReader.readQSOs(atPath: path)
+
+        XCTAssertEqual(qsos.map(\.state), ["CT", ""])
+    }
+
     func testFindsNewerTableVersion() throws {
         makeDatabase(table: "qso_table_v009", rows: ["('K1ABC', '20M', 'FT8', 1.0)"])
         XCTAssertEqual(try MacLoggerDXReader.readQSOs(atPath: path).count, 1)

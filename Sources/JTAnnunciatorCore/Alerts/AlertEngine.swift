@@ -19,6 +19,15 @@ public struct AlertEngine {
     /// Everything read from the user's logging programs, plus the entities those calls belong to.
     public private(set) var logbook = WorkedLog()
     private var logbookDXCCPrimaryPrefixes: Set<String> = []
+    /// Entities (by primary prefix) worked per band+mode, from the logbook and this session.
+    private var entityBandModes: Set<EntityBandMode> = []
+    private var sessionEntityBandModes: Set<EntityBandMode> = []
+
+    private struct EntityBandMode: Hashable {
+        var primaryPrefix: String
+        var band: String
+        var mode: String
+    }
 
     public init(wantedList: WantedList, dxccLookup: DXCCLookup) {
         self.wantedList = wantedList
@@ -33,6 +42,9 @@ public struct AlertEngine {
 
     private mutating func rebuildLogbookDXCC() {
         logbookDXCCPrimaryPrefixes = Set(logbook.callsigns.compactMap { dxccLookup.entity(forCallsign: $0)?.primaryPrefix })
+        entityBandModes = Set(logbook.callsignBandModes.compactMap { call, band, mode in
+            dxccLookup.entity(forCallsign: call).map { EntityBandMode(primaryPrefix: $0.primaryPrefix, band: band, mode: mode) }
+        })
     }
 
     /// True if `callsign` was worked this session or appears in the logbook.
@@ -58,6 +70,20 @@ public struct AlertEngine {
             ?? sessionLog.info(for: call, band: band, mode: mode)
     }
 
+    /// The DXCC entity name if `callsign`'s country has never been worked on this exact band and
+    /// mode (this session or in the logbook); `nil` if it has, or if the country can't be
+    /// determined.
+    public func newCountry(forCallsign callsign: String, band: String, mode: String) -> String? {
+        guard let entity = dxccLookup.entity(forCallsign: callsign) else { return nil }
+        let key = EntityBandMode(primaryPrefix: entity.primaryPrefix, band: band.uppercased(), mode: mode.uppercased())
+        return entityBandModes.contains(key) || sessionEntityBandModes.contains(key) ? nil : entity.name
+    }
+
+    /// True if no contact with a station in `state` on this band and mode is in the logbook.
+    public func hasWorkedState(_ state: String, band: String, mode: String) -> Bool {
+        logbook.hasWorkedState(state, band: band, mode: mode)
+    }
+
     /// Records a completed, logged QSO so future alerts for that callsign/entity can be marked
     /// "already worked" instead of suppressed outright.
     public mutating func recordQSOLogged(_ qso: WSJTXQSOLogged) {
@@ -70,6 +96,11 @@ public struct AlertEngine {
         ))
         if let entity = dxccLookup.entity(forCallsign: call) {
             workedDXCCPrimaryPrefixes.insert(entity.primaryPrefix)
+            if let band = Band.name(forFrequencyHz: qso.txFrequencyHz), !qso.mode.isEmpty {
+                sessionEntityBandModes.insert(EntityBandMode(
+                    primaryPrefix: entity.primaryPrefix, band: band, mode: qso.mode.uppercased()
+                ))
+            }
         }
     }
 

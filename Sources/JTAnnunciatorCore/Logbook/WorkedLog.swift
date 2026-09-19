@@ -8,12 +8,16 @@ public struct LogbookQSO: Equatable {
     public var band: String
     public var mode: String
     public var date: Date?
+    /// The state/province as the logger spells it ("CT", "ON"); empty if unknown. Only
+    /// US states and Canadian provinces are tracked (see `WorkedLog.hasWorkedState`).
+    public var state: String
 
-    public init(callsign: String, band: String, mode: String, date: Date? = nil) {
+    public init(callsign: String, band: String, mode: String, date: Date? = nil, state: String = "") {
         self.callsign = callsign
         self.band = band.trimmingCharacters(in: .whitespaces).uppercased()
         self.mode = mode.trimmingCharacters(in: .whitespaces).uppercased()
         self.date = date
+        self.state = state.trimmingCharacters(in: .whitespaces)
     }
 }
 
@@ -57,6 +61,13 @@ public struct WorkedLog: Equatable {
     }
 
     private var entries: [String: Entry] = [:]
+    private var stateBandModes: Set<StateBandMode> = []
+
+    private struct StateBandMode: Hashable {
+        var state: String
+        var band: String
+        var mode: String
+    }
 
     public init() {}
 
@@ -80,9 +91,13 @@ public struct WorkedLog: Equatable {
                 .absorb(count: 1, lastWorked: qso.date)
         }
         entries[key] = entry
+        if !qso.band.isEmpty, !qso.mode.isEmpty, let state = RegionNames.knownName(forState: qso.state) {
+            stateBandModes.insert(StateBandMode(state: state, band: qso.band, mode: qso.mode))
+        }
     }
 
     public mutating func merge(_ other: WorkedLog) {
+        stateBandModes.formUnion(other.stateBandModes)
         for (key, theirs) in other.entries {
             var entry = entries[key, default: Entry()]
             entry.bands.formUnion(theirs.bands)
@@ -118,6 +133,18 @@ public struct WorkedLog: Equatable {
             callsign: key, bands: [bandMode.band], modes: [bandMode.mode],
             qsoCount: stat.count, lastWorked: stat.lastWorked
         )
+    }
+
+    /// True if the log has a contact with a station in `state` (a US state or Canadian province,
+    /// code or full name) on exactly this band and mode.
+    public func hasWorkedState(_ state: String, band: String, mode: String) -> Bool {
+        guard let name = RegionNames.knownName(forState: state) else { return false }
+        return stateBandModes.contains(StateBandMode(state: name, band: band.uppercased(), mode: mode.uppercased()))
+    }
+
+    /// Every distinct callsign/band/mode combination in the log.
+    public var callsignBandModes: [(callsign: String, band: String, mode: String)] {
+        entries.flatMap { call, entry in entry.byBandMode.keys.map { (call, $0.band, $0.mode) } }
     }
 
     public func contains(_ callsign: String) -> Bool {

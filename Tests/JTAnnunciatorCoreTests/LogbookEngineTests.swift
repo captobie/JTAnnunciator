@@ -81,4 +81,52 @@ final class LogbookEngineTests: XCTestCase {
         XCTAssertNotNil(engine.workedInfo(for: decode("CQ K1ABC FN42"), band: "20M", mode: "FT8"))
         XCTAssertNil(engine.workedInfo(for: decode("CQ K1ABC FN42"), band: "40M", mode: "FT8"))
     }
+
+    private var japan: CTYEntry {
+        CTYEntry(
+            name: "Japan", cqZone: 25, ituZone: 45, continent: "AS", latitude: 36, longitude: -138,
+            utcOffsetHours: -9, primaryPrefix: "JA"
+        )
+    }
+
+    func testNewCountryOnlyWhenNotWorkedOnThisBandAndMode() {
+        var engine = AlertEngine(wantedList: WantedList(), dxccLookup: FixedDXCC(entity: japan))
+        engine.setLogbook(WorkedLog(qsos: [LogbookQSO(callsign: "JH4HVL", band: "20M", mode: "FT8")]))
+
+        // A different Japanese station: the country is what counts, on the band and mode.
+        XCTAssertNil(engine.newCountry(forCallsign: "JA1ZZZ", band: "20M", mode: "FT8"))
+        XCTAssertEqual(engine.newCountry(forCallsign: "JA1ZZZ", band: "40M", mode: "FT8"), "Japan")
+        XCTAssertEqual(engine.newCountry(forCallsign: "JA1ZZZ", band: "20M", mode: "FT4"), "Japan")
+    }
+
+    func testNewCountryUnknownWithoutDXCCData() {
+        let engine = AlertEngine(wantedList: WantedList(), dxccLookup: NoDXCC())
+        XCTAssertNil(engine.newCountry(forCallsign: "JA1ZZZ", band: "20M", mode: "FT8"))
+    }
+
+    func testSessionQSOClearsNewCountry() {
+        var engine = AlertEngine(wantedList: WantedList(), dxccLookup: FixedDXCC(entity: japan))
+        XCTAssertNotNil(engine.newCountry(forCallsign: "JA1ZZZ", band: "20M", mode: "FT8"))
+        engine.recordQSOLogged(WSJTXQSOLogged(
+            id: "WSJT-X", dateTimeOff: Date(), dxCall: "JH4HVL", dxGrid: "", txFrequencyHz: 14_074_000, mode: "FT8",
+            reportSent: "", reportReceived: "", txPower: "", comments: "", name: "", dateTimeOn: Date(),
+            operatorCall: "", myCall: "", myGrid: "", exchangeSent: "", exchangeReceived: ""
+        ))
+        XCTAssertNil(engine.newCountry(forCallsign: "JA1ZZZ", band: "20M", mode: "FT8"))
+        XCTAssertNotNil(engine.newCountry(forCallsign: "JA1ZZZ", band: "40M", mode: "FT8"))
+    }
+
+    func testStateWorkedPerBandAndMode() {
+        var engine = AlertEngine(wantedList: WantedList(), dxccLookup: NoDXCC())
+        engine.setLogbook(WorkedLog(qsos: [
+            LogbookQSO(callsign: "W1AW", band: "20M", mode: "FT8", state: "CT"),
+            LogbookQSO(callsign: "JH4HVL", band: "20M", mode: "FT8", state: "Kan"),
+        ]))
+
+        XCTAssertTrue(engine.hasWorkedState("Connecticut", band: "20M", mode: "FT8"))
+        XCTAssertFalse(engine.hasWorkedState("Connecticut", band: "40M", mode: "FT8"))
+        XCTAssertFalse(engine.hasWorkedState("Ohio", band: "20M", mode: "FT8"))
+        // Non-US/Canada regions (Japanese prefectures etc.) are not tracked as states.
+        XCTAssertFalse(engine.hasWorkedState("Kan", band: "20M", mode: "FT8"))
+    }
 }

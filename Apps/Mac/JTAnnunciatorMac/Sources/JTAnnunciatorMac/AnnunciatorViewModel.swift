@@ -3,6 +3,12 @@ import os
 import JTAnnunciatorCore
 
 /// One decode as shown on screen, paired with the alert (if any) it triggered.
+/// Why a decoded station is new to the log on the current band and mode.
+enum NewFlag: Equatable {
+    case country(String)
+    case state(String)
+}
+
 struct DecodeEntry: Identifiable {
     let id = UUID()
     let decode: WSJTXDecode
@@ -10,6 +16,13 @@ struct DecodeEntry: Identifiable {
     /// The transmitting station's callsign, and its DXCC country when a cty.dat is loaded.
     var callsign: String?
     var country: String?
+    /// Band and mode WSJT-X was on when this was decoded (`nil` before its first Status message).
+    var band: String?
+    var mode: String?
+    /// The country's name if it hasn't been worked before on `band` and `mode`.
+    var newCountry: String?
+    /// The message is addressed to the user's own callsign.
+    var callingMe = false
     /// Set when the sending station appears in a connected logbook (or was logged this session).
     var worked: WorkedInfo?
 }
@@ -313,6 +326,9 @@ final class AnnunciatorViewModel: ObservableObject {
                 decode: decode, alert: newAlerts.first,
                 callsign: callsign,
                 country: callsign.flatMap { engine.dxccLookup.entity(forCallsign: $0)?.name },
+                band: currentBand, mode: currentMode,
+                newCountry: newCountry(forCallsign: callsign),
+                callingMe: MessageClassifier.isDirected(decode.message, to: myCallsign),
                 worked: workedInfo(for: decode)
             ))
             trimIfNeeded(&entries)
@@ -357,6 +373,23 @@ final class AnnunciatorViewModel: ObservableObject {
         case .close, .wsprDecode, .loggedADIF, .unsupported:
             break
         }
+    }
+
+    private func newCountry(forCallsign callsign: String?) -> String? {
+        guard let callsign, let currentBand, let currentMode else { return nil }
+        return engine.newCountry(forCallsign: callsign, band: currentBand, mode: currentMode)
+    }
+
+    /// Whether this station's country, or (once the callbook has answered) its US state or
+    /// Canadian province, is new to the log on the band and mode it was decoded on.
+    func newFlag(for entry: DecodeEntry, record: CallbookRecord?) -> NewFlag? {
+        if let country = entry.newCountry { return .country(country) }
+        guard let band = entry.band, let mode = entry.mode,
+              let state = record?.state, !state.isEmpty,
+              let name = RegionNames.knownName(forState: state, country: record?.country),
+              !engine.hasWorkedState(name, band: band, mode: mode)
+        else { return nil }
+        return .state(name)
     }
 
     private func workedInfo(for decode: WSJTXDecode) -> WorkedInfo? {

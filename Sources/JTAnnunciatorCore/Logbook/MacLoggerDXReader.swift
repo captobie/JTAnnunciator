@@ -39,7 +39,8 @@ public enum MacLoggerDXReader {
         sqlite3_busy_timeout(db, 2000)
 
         let table = try qsoTableName(in: db)
-        let sql = "SELECT call, band_tx, mode, qso_done FROM \(table) WHERE call IS NOT NULL AND call != ''"
+        let stateColumn = try hasColumn("state", in: table, db: db) ? "state" : "''"
+        let sql = "SELECT call, band_tx, mode, qso_done, \(stateColumn) FROM \(table) WHERE call IS NOT NULL AND call != ''"
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
             throw ReadError.query(String(cString: sqlite3_errmsg(db)))
@@ -52,10 +53,22 @@ public enum MacLoggerDXReader {
                 ? nil : Date(timeIntervalSince1970: sqlite3_column_double(statement, 3))
             qsos.append(LogbookQSO(
                 callsign: text(statement, 0), band: text(statement, 1), mode: text(statement, 2),
-                date: date
+                date: date, state: text(statement, 4)
             ))
         }
         return qsos
+    }
+
+    private static func hasColumn(_ column: String, in table: String, db: OpaquePointer) throws -> Bool {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "PRAGMA table_info(\(table))", -1, &statement, nil) == SQLITE_OK else {
+            throw ReadError.query(String(cString: sqlite3_errmsg(db)))
+        }
+        defer { sqlite3_finalize(statement) }
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if text(statement, 1) == column { return true }
+        }
+        return false
     }
 
     private static func qsoTableName(in db: OpaquePointer) throws -> String {

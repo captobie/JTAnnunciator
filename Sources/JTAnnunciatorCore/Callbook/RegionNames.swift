@@ -33,4 +33,14 @@ public enum RegionNames {
         }
         return names[code] ?? state
     }
+
+    private static let fullNames = Set(names.values)
+
+    /// The canonical full name if `state` is a US state or Canadian province/territory (as a code
+    /// like "CT"/"PQ" or already spelled out), otherwise `nil` — so prefectures, counties and
+    /// other countries' regions are never mistaken for states.
+    public static func knownName(forState state: String, country: String? = nil) -> String? {
+        let name = fullName(forState: state, country: country)
+        return fullNames.contains(name) ? name : nil
+    }
 }

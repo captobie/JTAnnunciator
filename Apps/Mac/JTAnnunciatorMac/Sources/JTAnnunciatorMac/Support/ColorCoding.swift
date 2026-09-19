@@ -9,9 +9,7 @@ enum ColorCoding {
             return .secondary
         }
         switch event.reason {
-        case .wantedCallsign:
-            return .red
-        case .wantedDXCC:
+        case .wantedCallsign, .wantedDXCC:
             return .yellow
         }
     }
@@ -41,15 +39,15 @@ enum ColorCoding {
         return parts.joined(separator: " · ")
     }
 
-    /// The lit lamp this decode's box should show, or `nil` when the box stays dark.
-    /// Wanted stations light red (callsign) or amber (DXCC); any other CQ lights green.
-    static func lamp(for entry: DecodeEntry) -> Lamp? {
-        if let alert = entry.alert, !alert.alreadyWorked {
-            switch alert.reason {
-            case .wantedCallsign: return .red
-            case .wantedDXCC: return .amber
-            }
-        }
+    /// The lit lamp this decode's box should show, or `nil` when the box stays dark. In priority
+    /// order: red for stations calling you; yellow for stations on your wanted lists; blue for
+    /// stations already worked on the current band/mode (CQ or not); amber for a country or
+    /// state not yet worked on it; green for any other CQ.
+    static func lamp(for entry: DecodeEntry, newFlag: NewFlag?) -> Lamp? {
+        if entry.callingMe { return .red }
+        if let alert = entry.alert, !alert.alreadyWorked { return .yellow }
+        if entry.worked != nil { return .blue }
+        if newFlag != nil { return .amber }
         return MessageClassifier.isCQ(entry.decode.message) ? .green : nil
     }
 }
@@ -69,6 +67,14 @@ struct Lamp {
     static let red = Lamp(
         center: Color(red: 1.00, green: 0.42, blue: 0.32), edge: Color(red: 0.80, green: 0.06, blue: 0.08),
         glow: Color(red: 1.00, green: 0.15, blue: 0.10), legend: Color(red: 0.20, green: 0.00, blue: 0.00)
+    )
+    static let blue = Lamp(
+        center: Color(red: 0.62, green: 0.85, blue: 1.00), edge: Color(red: 0.10, green: 0.36, blue: 0.86),
+        glow: Color(red: 0.20, green: 0.55, blue: 1.00), legend: Color(red: 0.00, green: 0.06, blue: 0.20)
+    )
+    static let yellow = Lamp(
+        center: Color(red: 1.00, green: 1.00, blue: 0.62), edge: Color(red: 0.92, green: 0.78, blue: 0.04),
+        glow: Color(red: 1.00, green: 0.92, blue: 0.10), legend: Color(red: 0.18, green: 0.12, blue: 0.00)
     )
     static let amber = Lamp(
         center: Color(red: 1.00, green: 0.86, blue: 0.40), edge: Color(red: 0.95, green: 0.50, blue: 0.05),
