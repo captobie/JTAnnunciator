@@ -11,6 +11,8 @@ enum AppSettings {
         static let multicastAddress = "com.jtannunciator.multicastAddress"
         static let udpPort = "com.jtannunciator.udpPort"
         static let alertSoundEnabled = "com.jtannunciator.alertSoundEnabled"
+        static let myCallsign = "com.jtannunciator.myCallsign"
+        static let clearsOnNewCycle = "com.jtannunciator.clearsOnNewCycle"
     }
 
     static func loadWantedList() -> WantedList? {
@@ -49,5 +51,16 @@ enum AppSettings {
             UserDefaults.standard.object(forKey: Key.alertSoundEnabled) as? Bool ?? true
         }
         set { UserDefaults.standard.set(newValue, forKey: Key.alertSoundEnabled) }
+    }
+
+    static var clearsOnNewCycle: Bool {
+        get { UserDefaults.standard.object(forKey: Key.clearsOnNewCycle) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: Key.clearsOnNewCycle) }
+    }
+
+    /// The user's own callsign, used to pick out stations calling them.
+    static var myCallsign: String {
+        get { UserDefaults.standard.string(forKey: Key.myCallsign) ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: Key.myCallsign) }
     }
 }

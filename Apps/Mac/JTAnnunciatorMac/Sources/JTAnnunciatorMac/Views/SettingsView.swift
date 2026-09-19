@@ -44,6 +44,23 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Station") {
+                HStack {
+                    Text("My Callsign")
+                    TextField("e.g. W1AW", text: $viewModel.myCallsign)
+                        .frame(width: 120)
+                        .autocorrectionDisabled()
+                        .onChange(of: viewModel.myCallsign) { newValue in
+                            let upper = newValue.uppercased()
+                            if upper != newValue { viewModel.myCallsign = upper }
+                        }
+                }
+            }
+
+            Section("Display") {
+                Toggle("Clear decodes when a new cycle starts", isOn: $viewModel.clearsOnNewCycle)
+            }
+
             Section("Alerts") {
                 Toggle("Play sound on alert", isOn: $alertSoundEnabled)
                     .onChange(of: alertSoundEnabled) { newValue in

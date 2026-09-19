@@ -56,57 +56,92 @@ struct AnnunciatorView: View {
     }
 
     private var decodeList: some View {
-        List(viewModel.recentDecodes.indices, id: \.self) { index in
-            let decode = viewModel.recentDecodes[index]
-            DecodeRow(decode: decode, matchingAlert: alert(for: decode))
+        VSplitView {
+            DecodePane(title: "All Decodes", entries: viewModel.entries, emptyText: "Waiting for decodes…")
+                .frame(minHeight: 120)
+            HSplitView {
+                DecodePane(
+                    title: viewModel.myCallsign.isEmpty ? "Calling Me" : "Calling \(viewModel.myCallsign)",
+                    entries: viewModel.callingMeEntries,
+                    emptyText: viewModel.myCallsign.isEmpty ? "Set your callsign in Settings" : "No one calling you"
+                )
+                .frame(minWidth: 200)
+                DecodePane(title: "CQ", entries: viewModel.cqEntries, emptyText: "No CQs")
+                    .frame(minWidth: 200)
+            }
+            .frame(minHeight: 120)
         }
-        .listStyle(.plain)
-    }
-
-    private func alert(for decode: WSJTXDecode) -> AlertEvent? {
-        viewModel.alerts.first { $0.decode == decode }
     }
 }
 
-private struct DecodeRow: View {
-    let decode: WSJTXDecode
-    let matchingAlert: AlertEvent?
+/// A titled, scrolling grid of decode boxes.
+private struct DecodePane: View {
+    let title: String
+    let entries: [DecodeEntry]
+    let emptyText: String
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text(timeLabel)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .frame(width: 56, alignment: .leading)
-
-            Text(String(format: "%+3d", decode.snr))
-                .monospacedDigit()
-                .frame(width: 36, alignment: .trailing)
-
-            Text(decode.message)
-                .fontWeight(matchingAlert == nil ? .regular : .semibold)
-
-            Spacer()
-
-            if let matchingAlert {
-                Text(ColorCoding.badgeText(for: matchingAlert.reason))
-                    .font(.caption)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(ColorCoding.color(for: matchingAlert).opacity(0.2))
-                    .clipShape(Capsule())
+        VStack(spacing: 0) {
+            HStack {
+                Text(title).font(.headline)
+                Text("\(entries.count)").foregroundStyle(.secondary).monospacedDigit()
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            Divider()
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 10)], spacing: 10) {
+                    ForEach(entries) { entry in
+                        DecodeBox(entry: entry)
+                    }
+                }
+                .padding(12)
+            }
+            .overlay {
+                if entries.isEmpty {
+                    Text(emptyText).foregroundStyle(.secondary)
+                }
             }
         }
-        .foregroundStyle(matchingAlert.map(ColorCoding.color) ?? .primary)
-        .padding(.vertical, 2)
     }
+}
 
-    private var timeLabel: String {
-        guard let millis = decode.timeMillisSinceMidnightUTC else { return "--:--:--" }
-        let totalSeconds = millis / 1000
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+/// A single decode in a rectangular box; alert-matching decodes get a colored fill and border.
+private struct DecodeBox: View {
+    let entry: DecodeEntry
+
+    private var decode: WSJTXDecode { entry.decode }
+    private var tint: Color? { entry.alert.map(ColorCoding.color) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(decode.message)
+                .font(.system(.body, design: .monospaced).weight(entry.alert == nil ? .regular : .bold))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 8) {
+                Text(String(format: "%+d dB", decode.snr))
+                Text(String(format: "DT %.1f", decode.deltaTimeSeconds))
+                Text("\(decode.deltaFrequencyHz) Hz")
+                Spacer(minLength: 0)
+            }
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+
+            if let alert = entry.alert {
+                Text(ColorCoding.badgeText(for: alert.reason))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(tint ?? .primary)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, minHeight: 58, alignment: .topLeading)
+        .background((tint ?? Color.secondary).opacity(tint == nil ? 0.08 : 0.2), in: RoundedRectangle(cornerRadius: 4))
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .strokeBorder(tint ?? Color.secondary.opacity(0.35), lineWidth: tint == nil ? 1 : 2)
+        )
     }
 }

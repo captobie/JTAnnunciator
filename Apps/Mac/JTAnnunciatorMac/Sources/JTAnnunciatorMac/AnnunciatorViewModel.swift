@@ -1,15 +1,42 @@
 import Foundation
 import JTAnnunciatorCore
 
+/// One decode as shown on screen, paired with the alert (if any) it triggered.
+struct DecodeEntry: Identifiable {
+    let id = UUID()
+    let decode: WSJTXDecode
+    var alert: AlertEvent?
+}
+
 @MainActor
 final class AnnunciatorViewModel: ObservableObject {
-    @Published private(set) var recentDecodes: [WSJTXDecode] = []
+    /// Decodes on display, in arrival order. By default holds only the current cycle.
+    @Published private(set) var entries: [DecodeEntry] = []
+    /// Timestamp (ms since midnight UTC) of the cycle currently on display.
+    @Published private(set) var cycleTimeMillis: UInt32?
     @Published private(set) var alerts: [AlertEvent] = []
     @Published private(set) var latestAlert: AlertEvent?
     @Published private(set) var isListening = false
     @Published private(set) var lastErrorDescription: String?
     @Published private(set) var stationsHeard = 0
     @Published private(set) var dxccDatabaseEntityCount = 0
+
+    /// When true (the default) the display clears as soon as a decode from a new cycle arrives.
+    @Published var clearsOnNewCycle: Bool = AppSettings.clearsOnNewCycle {
+        didSet { AppSettings.clearsOnNewCycle = clearsOnNewCycle }
+    }
+
+    @Published var myCallsign: String = AppSettings.myCallsign {
+        didSet { AppSettings.myCallsign = myCallsign }
+    }
+
+    var callingMeEntries: [DecodeEntry] {
+        entries.filter { MessageClassifier.isDirected($0.decode.message, to: myCallsign) }
+    }
+
+    var cqEntries: [DecodeEntry] {
+        entries.filter { MessageClassifier.isCQ($0.decode.message) }
+    }
 
     @Published var wantedList: WantedList {
         didSet {
@@ -18,7 +45,7 @@ final class AnnunciatorViewModel: ObservableObject {
         }
     }
 
-    /// Keeps at most this many recent items in `recentDecodes`/`alerts`, so a long unattended
+    /// Keeps at most this many recent items in `entries`/`alerts`, so a long unattended
     /// session doesn't grow these arrays without bound.
     private let historyLimit = 300
 
@@ -75,14 +102,18 @@ final class AnnunciatorViewModel: ObservableObject {
     private func handle(_ message: WSJTXMessage) {
         switch message {
         case let .decode(decode):
-            recentDecodes.insert(decode, at: 0)
-            trimIfNeeded(&recentDecodes)
+            if clearsOnNewCycle, let cycle = cycleTimeMillis, decode.timeMillisSinceMidnightUTC != cycle {
+                entries.removeAll()
+            }
+            cycleTimeMillis = decode.timeMillisSinceMidnightUTC
             stationsHeard += 1
 
             let newAlerts = engine.process(decode)
+            entries.append(DecodeEntry(decode: decode, alert: newAlerts.first))
+            trimIfNeeded(&entries)
             guard !newAlerts.isEmpty else { return }
             alerts.insert(contentsOf: newAlerts, at: 0)
-            trimIfNeeded(&alerts)
+            trimIfNeeded(&alerts, newestFirst: true)
             latestAlert = newAlerts.first
             for alert in newAlerts {
                 AlertSoundPlayer.play(alreadyWorked: alert.alreadyWorked)
@@ -92,16 +123,21 @@ final class AnnunciatorViewModel: ObservableObject {
             engine.recordQSOLogged(qso)
 
         case .clear:
-            recentDecodes.removeAll()
+            entries.removeAll()
+            cycleTimeMillis = nil
 
         case .heartbeat, .status, .close, .wsprDecode, .loggedADIF, .unsupported:
             break
         }
     }
 
-    private func trimIfNeeded<T>(_ array: inout [T]) {
-        if array.count > historyLimit {
-            array.removeLast(array.count - historyLimit)
+    private func trimIfNeeded<T>(_ array: inout [T], newestFirst: Bool = false) {
+        guard array.count > historyLimit else { return }
+        let excess = array.count - historyLimit
+        if newestFirst {
+            array.removeLast(excess)
+        } else {
+            array.removeFirst(excess)
         }
     }
 }

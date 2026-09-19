@@ -15,7 +15,7 @@ struct JTAnnunciatorApp: App {
     var body: some Scene {
         WindowGroup {
             AnnunciatorView(viewModel: viewModel)
-                .frame(minWidth: 720, minHeight: 480)
+                .frame(minWidth: 720, minHeight: 560)
                 .onAppear { viewModel.start() }
                 .onDisappear { viewModel.stop() }
         }
