@@ -77,6 +77,7 @@ struct AnnunciatorView: View {
                     title: viewModel.myCallsign.isEmpty ? "Calling Me" : "Calling \(viewModel.myCallsign)",
                     entries: viewModel.callingMeEntries,
                     emptyText: viewModel.myCallsign.isEmpty ? "Set your callsign in Settings" : "No one calling you",
+                    clearActions: ClearActions(one: viewModel.clearCallingMe, all: viewModel.clearAllCallingMe),
                     onReply: viewModel.reply
                 )
                 .frame(minWidth: 200)
@@ -88,11 +89,19 @@ struct AnnunciatorView: View {
     }
 }
 
-/// A titled, scrolling grid of decode boxes.
+/// Manual-clear hooks for a pane whose decodes persist across cycles.
+private struct ClearActions {
+    let one: (DecodeEntry) -> Void
+    let all: () -> Void
+}
+
+/// A titled, scrolling grid of decode boxes. Panes given `clearActions` keep their decodes until
+/// cleared by the user (right-click a box, or "Clear All"), and show each decode's time.
 private struct DecodePane: View {
     let title: String
     let entries: [DecodeEntry]
     let emptyText: String
+    var clearActions: ClearActions?
     let onReply: (WSJTXDecode) -> Void
 
     var body: some View {
@@ -101,6 +110,11 @@ private struct DecodePane: View {
                 Text(title).font(.headline)
                 Text("\(entries.count)").foregroundStyle(.secondary).monospacedDigit()
                 Spacer()
+                if let clearActions {
+                    Button("Clear All", action: clearActions.all)
+                        .controlSize(.small)
+                        .disabled(entries.isEmpty)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -108,9 +122,14 @@ private struct DecodePane: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 10)], spacing: 10) {
                     ForEach(entries) { entry in
-                        DecodeBox(entry: entry)
+                        DecodeBox(entry: entry, showsTime: clearActions != nil)
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { onReply(entry.decode) }
+                            .contextMenu {
+                                if let clearActions {
+                                    Button("Clear") { clearActions.one(entry) }
+                                }
+                            }
                     }
                 }
                 .padding(12)
@@ -127,8 +146,14 @@ private struct DecodePane: View {
 /// A single decode in a rectangular box; alert-matching decodes get a colored fill and border.
 private struct DecodeBox: View {
     let entry: DecodeEntry
+    var showsTime = false
 
     private var decode: WSJTXDecode { entry.decode }
+    private var timeLabel: String? {
+        guard let millis = decode.timeMillisSinceMidnightUTC else { return nil }
+        let seconds = millis / 1000
+        return String(format: "%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60)
+    }
     private var tint: Color? { entry.alert.map(ColorCoding.color) }
 
     var body: some View {
@@ -139,6 +164,9 @@ private struct DecodeBox: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 8) {
+                if showsTime, let time = timeLabel {
+                    Text(time)
+                }
                 Text(String(format: "%+d dB", decode.snr))
                 Text(String(format: "DT %.1f", decode.deltaTimeSeconds))
                 Text("\(decode.deltaFrequencyHz) Hz")

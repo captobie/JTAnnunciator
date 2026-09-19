@@ -45,9 +45,9 @@ final class AnnunciatorViewModel: ObservableObject {
         didSet { AppSettings.myGrid = myGrid }
     }
 
-    var callingMeEntries: [DecodeEntry] {
-        entries.filter { MessageClassifier.isDirected($0.decode.message, to: myCallsign) }
-    }
+    /// Decodes addressed to `myCallsign`. Unlike `entries` these survive cycle changes and
+    /// persist until the user clears them.
+    @Published private(set) var callingMeEntries: [DecodeEntry] = []
 
     var cqEntries: [DecodeEntry] {
         entries.filter { MessageClassifier.isCQ($0.decode.message) }
@@ -81,6 +81,14 @@ final class AnnunciatorViewModel: ObservableObject {
         let database = Self.loadDXCCDatabase()
         engine = AlertEngine(wantedList: storedWantedList, dxccLookup: database)
         dxccDatabaseEntityCount = database.prefixes.count + database.exactCallsigns.count
+    }
+
+    func clearCallingMe(_ entry: DecodeEntry) {
+        callingMeEntries.removeAll { $0.id == entry.id }
+    }
+
+    func clearAllCallingMe() {
+        callingMeEntries.removeAll()
     }
 
     func start() {
@@ -220,6 +228,20 @@ final class AnnunciatorViewModel: ObservableObject {
             let newAlerts = engine.process(decode)
             entries.append(DecodeEntry(decode: decode, alert: newAlerts.first, worked: engine.workedInfo(for: decode)))
             trimIfNeeded(&entries)
+            // Skip WSJT-X's re-deliveries of a decode. One box per calling station: a later message
+            // from the same callsign (report, then RR73) updates its box in place.
+            if decode.isNew, MessageClassifier.isDirected(decode.message, to: myCallsign) {
+                let latest = entries[entries.count - 1]
+                let sender = MessageClassifier.sender(of: decode.message)
+                if let sender, let index = callingMeEntries.firstIndex(where: {
+                    MessageClassifier.sender(of: $0.decode.message) == sender
+                }) {
+                    callingMeEntries[index] = latest
+                } else {
+                    callingMeEntries.append(latest)
+                    trimIfNeeded(&callingMeEntries)
+                }
+            }
             guard !newAlerts.isEmpty else { return }
             alerts.insert(contentsOf: newAlerts, at: 0)
             trimIfNeeded(&alerts, newestFirst: true)

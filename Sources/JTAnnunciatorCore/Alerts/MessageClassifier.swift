@@ -24,6 +24,13 @@ public enum MessageClassifier {
         return isCQ(message) ? candidates.first : candidates.last
     }
 
+    /// The transmitting station of a directed message: the second token of "K7CMA AA6NN -12"
+    /// is AA6NN. Returns nil for messages with fewer than two tokens.
+    public static func sender(of message: String) -> String? {
+        let all = tokens(message)
+        return all.count >= 2 ? all[1] : nil
+    }
+
     private static func tokens(_ message: String) -> [String] {
         message.split(separator: " ").map { normalize(String($0)) }
     }

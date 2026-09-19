@@ -18,4 +18,10 @@ final class MessageClassifierTests: XCTestCase {
         XCTAssertFalse(MessageClassifier.isDirected("CQ W9XYZ EN52", to: "W9XYZ"))
         XCTAssertFalse(MessageClassifier.isDirected("W9XYZ K1ABC -12", to: ""))
     }
+
+    func testSender() {
+        XCTAssertEqual(MessageClassifier.sender(of: "K7CMA AA6NN -12"), "AA6NN")
+        XCTAssertEqual(MessageClassifier.sender(of: "K7CMA <AA6NN> RR73"), "AA6NN")
+        XCTAssertNil(MessageClassifier.sender(of: "73"))
+    }
 }
