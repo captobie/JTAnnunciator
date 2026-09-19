@@ -145,7 +145,8 @@ private struct DecodePane: View {
     }
 }
 
-/// A single decode in a rectangular box: the calling station's callsign and country, centered.
+/// A single decode in a rectangular box: the calling station's callsign and its state/province
+/// (or country), centered.
 /// Everything else about the decode is in the hover tooltip. Alert-matching decodes get a
 /// colored fill and border.
 private struct DecodeBox: View {
@@ -162,8 +163,8 @@ private struct DecodeBox: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .foregroundStyle(entry.worked == nil ? .primary : .tertiary)
-            if let country = entry.country {
-                Text(country)
+            if let region {
+                Text(region)
                     .font(.callout)
                     .foregroundStyle(entry.worked == nil ? .secondary : .tertiary)
                     .lineLimit(1)
@@ -177,6 +178,14 @@ private struct DecodeBox: View {
                 .strokeBorder(tint ?? Color.secondary.opacity(0.35), lineWidth: tint == nil ? 1 : 2)
         )
         .help(hoverText)
+    }
+
+    /// Second line: the state or province when the callbook supplied one, otherwise the country.
+    private var region: String? {
+        if let state = record?.state, !state.isEmpty {
+            return RegionNames.fullName(forState: state, country: record?.country)
+        }
+        return entry.country
     }
 
     /// All the detail for this decode, shown on hover.
