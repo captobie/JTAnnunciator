@@ -7,6 +7,8 @@ import JTAnnunciatorCore
 enum NewFlag: Equatable {
     case country(String)
     case state(String)
+    /// A state or province on the wanted list that hasn't been worked on this band and mode.
+    case wantedState(String)
 }
 
 struct DecodeEntry: Identifiable {
@@ -383,10 +385,14 @@ final class AnnunciatorViewModel: ObservableObject {
     /// Whether this station's country, or (once the callbook has answered) its US state or
     /// Canadian province, is new to the log on the band and mode it was decoded on.
     func newFlag(for entry: DecodeEntry, record: CallbookRecord?) -> NewFlag? {
+        let stateName = record?.state.flatMap { RegionNames.knownName(forState: $0, country: record?.country) }
+        if let name = stateName, wantedList.wantedStates.contains(name),
+           let band = entry.band, let mode = entry.mode,
+           !engine.hasWorkedState(name, band: band, mode: mode) {
+            return .wantedState(name)
+        }
         if let country = entry.newCountry { return .country(country) }
-        guard let band = entry.band, let mode = entry.mode,
-              let state = record?.state, !state.isEmpty,
-              let name = RegionNames.knownName(forState: state, country: record?.country),
+        guard let band = entry.band, let mode = entry.mode, let name = stateName,
               !engine.hasWorkedState(name, band: band, mode: mode)
         else { return nil }
         return .state(name)

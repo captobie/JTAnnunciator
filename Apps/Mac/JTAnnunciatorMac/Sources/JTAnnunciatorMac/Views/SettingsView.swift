@@ -19,6 +19,7 @@ struct SettingsView: View {
     @State private var qrzPassword: String = ""
     @State private var qrzTestResult: (message: String, succeeded: Bool)?
     @State private var qrzTesting = false
+    @State private var showingWantedLists = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,6 +36,9 @@ struct SettingsView: View {
             .padding(12)
         }
         .onAppear(perform: loadDrafts)
+        .sheet(isPresented: $showingWantedLists) {
+            WantedListsView(viewModel: viewModel)
+        }
     }
 
     private var form: some View {
@@ -110,6 +114,9 @@ struct SettingsView: View {
         Form {
             Section("Alerts") {
                 Toggle("Play sound on alert", isOn: $alertSoundEnabled)
+            }
+            Section("Wanted") {
+                Button("Wanted Lists…") { showingWantedLists = true }
             }
         }
         .padding(8)

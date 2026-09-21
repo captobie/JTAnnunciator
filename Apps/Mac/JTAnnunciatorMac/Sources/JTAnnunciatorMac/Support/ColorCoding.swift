@@ -46,6 +46,7 @@ enum ColorCoding {
     static func lamp(for entry: DecodeEntry, newFlag: NewFlag?) -> Lamp? {
         if entry.callingMe { return .red }
         if let alert = entry.alert, !alert.alreadyWorked { return .yellow }
+        if case .wantedState = newFlag { return .yellow }
         if entry.worked != nil { return .blue }
         if newFlag != nil { return .amber }
         return MessageClassifier.isCQ(entry.decode.message) ? .green : nil

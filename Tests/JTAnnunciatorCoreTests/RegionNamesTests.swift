@@ -13,4 +13,10 @@ final class RegionNamesTests: XCTestCase {
         XCTAssertEqual(RegionNames.fullName(forState: "CA", country: "Germany"), "CA")
         XCTAssertEqual(RegionNames.fullName(forState: "Texas", country: "United States"), "Texas")
     }
+
+    func testKnownNameIsCaseInsensitive() {
+        XCTAssertEqual(RegionNames.knownName(forState: "wyoming"), "Wyoming")
+        XCTAssertEqual(RegionNames.knownName(forState: "wy"), "Wyoming")
+        XCTAssertNil(RegionNames.knownName(forState: "Bavaria"))
+    }
 }

@@ -15,7 +15,7 @@ struct ColorKeyView: View {
         Row(id: "red", lamp: .red, title: "Calling you",
             detail: "The message is addressed to your callsign."),
         Row(id: "yellow", lamp: .yellow, title: "Wanted",
-            detail: "On your wanted callsign or DXCC lists, and not yet worked."),
+            detail: "On your wanted callsign, DXCC or state lists, and not yet worked."),
         Row(id: "blue", lamp: .blue, title: "Worked before",
             detail: "Already in your log on the current band and mode. The text is dimmed."),
         Row(id: "amber", lamp: .amber, title: "New country or state",

@@ -237,6 +237,7 @@ private struct DecodeBox: View {
             switch newFlag {
             case let .country(name): lines.append("NEW COUNTRY · \(name) on \(onBandMode)")
             case let .state(name): lines.append("NEW STATE · \(name) on \(onBandMode)")
+            case let .wantedState(name): lines.append("WANTED STATE · \(name) on \(onBandMode)")
             }
         }
         if let worked = entry.worked {

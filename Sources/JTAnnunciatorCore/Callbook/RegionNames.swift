@@ -41,6 +41,7 @@ public enum RegionNames {
     /// other countries' regions are never mistaken for states.
     public static func knownName(forState state: String, country: String? = nil) -> String? {
         let name = fullName(forState: state, country: country)
-        return fullNames.contains(name) ? name : nil
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        return fullNames.first { $0.caseInsensitiveCompare(trimmed) == .orderedSame }
     }
 }
