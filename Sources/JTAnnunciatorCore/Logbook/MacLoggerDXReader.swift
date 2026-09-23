@@ -87,13 +87,4 @@ public enum MacLoggerDXReader {
         return String(cString: cString)
     }
 }
-
-extension LogbookConnection {
-    /// Reads this connection's log with the reader for its kind.
-    public func readQSOs() throws -> [LogbookQSO] {
-        switch kind {
-        case .macLoggerDX: return try MacLoggerDXReader.readQSOs(atPath: path)
-        }
-    }
-}
 #endif

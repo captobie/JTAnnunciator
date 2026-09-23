@@ -186,6 +186,9 @@ struct SettingsView: View {
                     }
                 }
                 .fixedSize()
+                Text("Wavelog needs a read-only API key from its Settings → API Keys page, and the station profile ID whose QSOs to read (usually 1).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(8)
@@ -197,7 +200,9 @@ struct SettingsView: View {
                 Toggle(logbook.wrappedValue.kind.displayName, isOn: logbook.isEnabled)
                     .fontWeight(.medium)
                 Spacer()
-                Button("Choose…") { chooseLogbookFile(logbook) }
+                if logbook.wrappedValue.kind.isFileBased {
+                    Button("Choose…") { chooseLogbookFile(logbook) }
+                }
                 Button {
                     logbooks.removeAll { $0.id == logbook.wrappedValue.id }
                 } label: {
@@ -206,18 +211,52 @@ struct SettingsView: View {
                 .buttonStyle(.borderless)
                 .help("Remove this log connection")
             }
-            Text(logbook.wrappedValue.path.isEmpty ? "No file selected" : logbook.wrappedValue.path)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.head)
-            if let status = viewModel.logbookStatuses[logbook.wrappedValue.id] {
-                Text(status)
+            if logbook.wrappedValue.kind.isFileBased {
+                Text(logbook.wrappedValue.path.isEmpty ? "No file selected" : logbook.wrappedValue.path)
                     .font(.caption)
-                    .foregroundStyle(status.hasSuffix("loaded") ? .green : .red)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+            } else {
+                networkLogbookFields(logbook)
+            }
+            if let status = viewModel.logbookStatuses[logbook.wrappedValue.id] {
+                Text(status.message)
+                    .font(.caption)
+                    .foregroundStyle(status.isError ? .red : .green)
             }
         }
         .padding(.vertical, 2)
+    }
+
+    private func networkLogbookFields(_ logbook: Binding<LogbookConnection>) -> some View {
+        Grid(alignment: .leading) {
+            GridRow {
+                Text("Server URL").font(.caption).foregroundStyle(.secondary)
+                TextField("https://log.example.com", text: Binding(
+                    get: { logbook.wrappedValue.serverURL ?? "" },
+                    set: { logbook.wrappedValue.serverURL = $0 }
+                ))
+                .autocorrectionDisabled()
+                .frame(width: 220)
+            }
+            GridRow {
+                Text("API Key").font(.caption).foregroundStyle(.secondary)
+                SecureField("Read-only API key", text: Binding(
+                    get: { logbook.wrappedValue.apiKey ?? "" },
+                    set: { logbook.wrappedValue.apiKey = $0 }
+                ))
+                .frame(width: 220)
+            }
+            GridRow {
+                Text("Station ID").font(.caption).foregroundStyle(.secondary)
+                TextField("1", text: Binding(
+                    get: { String(logbook.wrappedValue.stationID ?? 1) },
+                    set: { logbook.wrappedValue.stationID = Int($0) ?? logbook.wrappedValue.stationID }
+                ))
+                .frame(width: 60)
+            }
+        }
     }
 
     private var filtersTab: some View {
@@ -311,9 +350,14 @@ struct SettingsView: View {
         ctyDatPath = url.path
     }
 
-    /// Adds a connection for `kind`, pre-filled with that program's usual log location if it
-    /// exists; otherwise asks the user to pick the file.
+    /// Adds a connection for `kind`. File-based loggers are pre-filled with the program's usual
+    /// log location if it exists, otherwise the user is asked to pick the file. Network-based
+    /// loggers (Wavelog) are added straight away with empty fields for the user to fill in.
     private func addLogbook(_ kind: LogbookKind) {
+        guard kind.isFileBased else {
+            logbooks.append(LogbookConnection(kind: kind))
+            return
+        }
         let defaultPath = kind.defaultRelativePath.map {
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent($0).path
         }

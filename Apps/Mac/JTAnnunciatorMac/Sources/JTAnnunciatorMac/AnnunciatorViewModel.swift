@@ -11,6 +11,12 @@ enum NewFlag: Equatable {
     case wantedState(String)
 }
 
+/// A logbook connection's most recent read result, for the Settings UI.
+struct LogbookStatus: Equatable {
+    var message: String
+    var isError: Bool
+}
+
 struct DecodeEntry: Identifiable {
     let id = UUID()
     let decode: WSJTXDecode
@@ -49,8 +55,8 @@ final class AnnunciatorViewModel: ObservableObject {
     @Published private(set) var stationsHeard = 0
     @Published private(set) var dxccDatabaseEntityCount = 0
     @Published private(set) var logbookConnections: [LogbookConnection] = AppSettings.logbookConnections
-    /// One human-readable line per connection ("1,481 QSOs" or the error), shown in Settings.
-    @Published private(set) var logbookStatuses: [UUID: String] = [:]
+    /// One line per connection ("1,481 QSOs loaded" or the error), shown in Settings.
+    @Published private(set) var logbookStatuses: [UUID: LogbookStatus] = [:]
     /// Distinct callsigns across all enabled logbooks.
     @Published private(set) var logbookCallsignCount = 0
     /// Callbook results by callsign, shown in decode hover details.
@@ -96,10 +102,19 @@ final class AnnunciatorViewModel: ObservableObject {
     private var engine: AlertEngine
     private var listener: WSJTXUDPListener?
     private var logbookWatcher: Task<Void, Never>?
-    /// Modification time of each logbook file as of its last read, so the watcher only re-reads
-    /// a log that actually changed (e.g. MacLoggerDX saved a new QSO).
+    /// Modification time of each file-based logbook as of its last read, so the watcher only
+    /// re-reads a log that actually changed (e.g. MacLoggerDX saved a new QSO).
     private var logbookModificationDates: [UUID: Date] = [:]
+    /// When each network-based logbook (Wavelog) was last polled, so the watcher doesn't hit the
+    /// server every 30 seconds forever — see `networkPollInterval`.
+    private var logbookLastPollDates: [UUID: Date] = [:]
+    /// Everything known from each connection so far, kept separately so a network logger's
+    /// incremental ("delta") pulls can be merged in rather than replacing what's already known.
+    private var logbookBuckets: [UUID: WorkedLog] = [:]
     private var logbookLoadGeneration = 0
+    /// How often a network-based logbook (Wavelog) is re-polled. File-based logs are checked
+    /// every watcher tick (cheap: just a file stat) and re-read only when they actually changed.
+    private static let networkPollInterval: TimeInterval = 300
     private var callbook: (any CallbookProvider)?
     /// Callsigns already looked up (found or not) or queued, so each is asked for once.
     private var callbookRequested: Set<String> = []
@@ -154,8 +169,25 @@ final class AnnunciatorViewModel: ObservableObject {
     /// Saves the logbook connections and re-reads every enabled log.
     func setLogbookConnections(_ connections: [LogbookConnection]) {
         guard connections != logbookConnections else { return }
-        logbookConnections = connections
-        AppSettings.logbookConnections = connections
+
+        // A network connection whose server or station changed can't resume its old
+        // `lastFetchedID` — that position belongs to a different log. Drop it and start over.
+        var normalized = connections
+        for index in normalized.indices {
+            guard let previous = logbookConnections.first(where: { $0.id == normalized[index].id }),
+                  previous.serverURL != normalized[index].serverURL || previous.stationID != normalized[index].stationID
+            else { continue }
+            normalized[index].lastFetchedID = nil
+            logbookBuckets[normalized[index].id] = nil
+        }
+        for removedID in Set(logbookConnections.map(\.id)).subtracting(normalized.map(\.id)) {
+            logbookBuckets[removedID] = nil
+            logbookModificationDates[removedID] = nil
+            logbookLastPollDates[removedID] = nil
+        }
+
+        logbookConnections = normalized
+        AppSettings.logbookConnections = normalized
         reloadLogbooks()
     }
 
@@ -221,40 +253,73 @@ final class AnnunciatorViewModel: ObservableObject {
         }
     }
 
-    /// Re-reads all enabled logbooks off the main thread, then swaps the result into the engine.
-    func reloadLogbooks() {
+    /// Re-reads the given logbooks (every enabled one by default) off the main thread, then
+    /// merges the results into the engine. A network-based logger's result is merged into what's
+    /// already known for it (a "delta" pull); a file-based logger's result replaces it outright
+    /// (re-reading the whole file is cheap and always current).
+    func reloadLogbooks(_ subset: [LogbookConnection]? = nil) {
         logbookLoadGeneration += 1
         let generation = logbookLoadGeneration
-        let connections = logbookConnections.filter(\.isEnabled)
+        let targets = subset ?? logbookConnections.filter(\.isEnabled)
+        guard !targets.isEmpty else { return }
 
         Task {
-            let results = await Task.detached(priority: .utility) {
-                connections.map { connection -> (LogbookConnection, Result<[LogbookQSO], Error>, Date?) in
-                    let modified = try? FileManager.default.attributesOfItem(atPath: connection.path)[.modificationDate] as? Date
-                    return (connection, Result { try connection.readQSOs() }, modified)
+            var results: [(LogbookConnection, Result<LogbookReadResult, Error>)] = []
+            await withTaskGroup(of: (LogbookConnection, Result<LogbookReadResult, Error>).self) { group in
+                for connection in targets {
+                    group.addTask {
+                        do { return (connection, .success(try await connection.fetch())) }
+                        catch { return (connection, .failure(error)) }
+                    }
                 }
-            }.value
+                for await result in group { results.append(result) }
+            }
 
             // A newer reload (or a settings change) started while this one ran; drop this result.
             guard generation == logbookLoadGeneration else { return }
 
-            var combined = WorkedLog()
-            var statuses: [UUID: String] = [:]
-            var modificationDates: [UUID: Date] = [:]
-            for (connection, result, modified) in results {
-                if let modified { modificationDates[connection.id] = modified }
+            var updatedConnections = logbookConnections
+            var statuses = logbookStatuses
+            let now = Date()
+            for (connection, result) in results {
+                if connection.kind.isFileBased {
+                    let modified = try? FileManager.default.attributesOfItem(atPath: connection.path)[.modificationDate] as? Date
+                    logbookModificationDates[connection.id] = modified
+                } else {
+                    logbookLastPollDates[connection.id] = now
+                }
+
                 switch result {
-                case let .success(qsos):
-                    combined.merge(WorkedLog(qsos: qsos))
-                    statuses[connection.id] = "\(qsos.count.formatted()) QSOs loaded"
+                case let .success(read):
+                    if read.isDelta {
+                        logbookBuckets[connection.id, default: WorkedLog()].merge(WorkedLog(qsos: read.qsos))
+                    } else {
+                        logbookBuckets[connection.id] = WorkedLog(qsos: read.qsos)
+                    }
+                    let total = logbookBuckets[connection.id]?.callsignCount ?? 0
+                    let message = read.isDelta
+                        ? (read.qsos.isEmpty
+                            ? "Up to date · \(total.formatted()) stations"
+                            : "\(read.qsos.count.formatted()) new QSOs · \(total.formatted()) stations")
+                        : "\(read.qsos.count.formatted()) QSOs loaded"
+                    statuses[connection.id] = LogbookStatus(message: message, isError: false)
+                    if let index = updatedConnections.firstIndex(where: { $0.id == connection.id }) {
+                        updatedConnections[index] = read.updatedConnection
+                    }
                 case let .failure(error):
-                    statuses[connection.id] = error.localizedDescription
+                    statuses[connection.id] = LogbookStatus(message: error.localizedDescription, isError: true)
                 }
             }
+
+            var combined = WorkedLog()
+            for bucket in logbookBuckets.values { combined.merge(bucket) }
             engine.setLogbook(combined)
             logbookCallsignCount = combined.callsignCount
             logbookStatuses = statuses
-            logbookModificationDates = modificationDates
+            if updatedConnections != logbookConnections {
+                logbookConnections = updatedConnections
+                AppSettings.logbookConnections = updatedConnections
+            }
         }
     }
 
@@ -264,17 +329,26 @@ final class AnnunciatorViewModel: ObservableObject {
         logbookWatcher = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
-                self?.reloadLogbooksIfChanged()
+                self?.pollLogbooksIfDue()
             }
         }
     }
 
-    private func reloadLogbooksIfChanged() {
-        let changed = logbookConnections.filter(\.isEnabled).contains { connection in
-            let modified = try? FileManager.default.attributesOfItem(atPath: connection.path)[.modificationDate] as? Date
-            return modified != logbookModificationDates[connection.id]
+    /// Checks which enabled logbooks are due for a re-read: a file-based one whenever its file's
+    /// modification date has changed, a network-based one every `networkPollInterval`.
+    private func pollLogbooksIfDue() {
+        let now = Date()
+        let due = logbookConnections.filter { connection in
+            guard connection.isEnabled else { return false }
+            if connection.kind.isFileBased {
+                let modified = try? FileManager.default.attributesOfItem(atPath: connection.path)[.modificationDate] as? Date
+                return modified != logbookModificationDates[connection.id]
+            }
+            let lastPoll = logbookLastPollDates[connection.id] ?? .distantPast
+            return now.timeIntervalSince(lastPoll) >= Self.networkPollInterval
         }
-        if changed { reloadLogbooks() }
+        guard !due.isEmpty else { return }
+        reloadLogbooks(due)
     }
 
     /// Does what double-clicking `decode` in WSJT-X would: selects the station and queues the
