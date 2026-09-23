@@ -33,7 +33,12 @@ struct JTAnnunciatorApp: App {
 
         Settings {
             SettingsView(viewModel: viewModel)
-                .frame(minWidth: 480, idealWidth: 520, maxWidth: .infinity, minHeight: 420, idealHeight: 480, maxHeight: .infinity)
+                .frame(minWidth: 480, idealWidth: 520, maxWidth: .infinity, minHeight: 420, idealHeight: 560, maxHeight: .infinity)
         }
+        // `.contentMinSize` (rather than the `.automatic` default) is what actually puts a drag
+        // handle on a `Settings` window: it lets the window grow past its ideal size instead of
+        // pinning to it, and shrink down to `minWidth`/`minHeight` above with each tab's own
+        // ScrollView (see SettingsView) taking over once it's smaller than the tab's content.
+        .windowResizability(.contentMinSize)
     }
 }

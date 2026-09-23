@@ -43,18 +43,27 @@ struct SettingsView: View {
 
     private var form: some View {
         TabView {
-            generalTab
+            // Each tab's Form is wrapped in its own ScrollView, so a tab whose content doesn't
+            // fit the window scrolls internally instead of clipping and pushing the Cancel/Save
+            // row (a sibling of this whole TabView, not inside it) off the bottom of the window.
+            scrollable(generalTab)
                 .tabItem { Label("General", systemImage: "gearshape") }
-            networkTab
+            scrollable(networkTab)
                 .tabItem { Label("Network", systemImage: "network") }
-            notificationsTab
+            scrollable(notificationsTab)
                 .tabItem { Label("Notifications", systemImage: "bell") }
-            lookupTab
+            scrollable(lookupTab)
                 .tabItem { Label("Lookup", systemImage: "magnifyingglass") }
-            filtersTab
+            scrollable(filtersTab)
                 .tabItem { Label("Filters", systemImage: "line.3.horizontal.decrease.circle") }
         }
         .padding(12)
+    }
+
+    private func scrollable(_ tab: some View) -> some View {
+        ScrollView {
+            tab.frame(maxWidth: .infinity, alignment: .topLeading)
+        }
     }
 
     private var generalTab: some View {
