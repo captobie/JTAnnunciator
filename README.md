@@ -1,5 +1,7 @@
 # JTAnnunciator
 
+![JTAnnunciator main window](docs/screenshot.jpg)
+
 A native Mac app that listens to [WSJT-X](https://wsjtx.groups.io/g/main)'s UDP protocol and
 gives [JTAlert](https://www.dxlabsuite.com/jtalert/)-style visual/audio alerts when a wanted
 callsign or wanted DXCC entity is decoded. JTAlert is Windows-only; [JT-Bridge](https://www.qsl.net/on4kjm/JTBridge/index.html),
@@ -7,14 +9,15 @@ its closest Mac analogue, doesn't attempt JTAlert's visual approach. This app ex
 that specific thing — a genuinely visual, glanceable "hey, THIS station just showed up" alert —
 to macOS.
 
-## Status: v1 scaffold, not yet run against real hardware/software
+## Status: working v1, running against live WSJT-X
 
-This repo was scaffolded without access to a macOS/Xcode toolchain, so **nothing here has been
-built, run, or tested against a live WSJT-X instance yet.** The core protocol/logic layer
-(`Sources/JTAnnunciatorCore`) is unit-tested and its tests are believed correct by careful manual
-review, but "believed correct by review" is not the same bar as "ran `swift test` and it passed"
-— that's the first thing to do once this is opened on an actual Mac. See "First things to verify
-on real hardware" below before trusting this for real operating.
+The app builds and runs on macOS and has been used against a live WSJT-X instance: decodes
+arrive over UDP, DXCC lookups resolve from a real cty.dat, and the logbook connection marks
+already-worked stations (see the screenshot above). The core protocol/logic layer
+(`Sources/JTAnnunciatorCore`) is unit-tested, and `swift test` passes (93 tests, 0 failures).
+
+It hasn't been tried across many WSJT-X versions or unusual setups yet, so the checks in
+"Things to verify on a new setup" below are still worth a quick pass on a new install.
 
 ## Scope
 
@@ -101,17 +104,14 @@ every message shape alerts correctly on any wanted station present in it, at the
 occasionally mis-flagging a token in a free-text message. Fine for v1's alerting purpose; a real
 grammar-based parser is a reasonable future improvement, not a correctness blocker.
 
-## First things to verify on real hardware
+## Things to verify on a new setup
 
 In rough priority order, since each one gates the next:
 
-1. **`swift build && swift test` from the repo root** — confirm `JTAnnunciatorCore` actually
-   compiles and its tests pass. This was written without a Swift toolchain available; the code
-   has had a careful manual read-through (types, field ordering against the real
-   `NetworkMessage.hpp`, Optional/throws handling) but zero compiler verification.
-2. **`swift run` from `Apps/Mac/JTAnnunciatorMac/`** — confirm the SwiftUI app itself builds.
-   This is the layer most likely to have a real macOS-only API mistake (Network.framework
-   usage, `NSOpenPanel`, SwiftUI availability).
+1. **`swift build && swift test` from the repo root** — confirm `JTAnnunciatorCore` compiles
+   and its tests pass with your toolchain.
+2. **`swift run` from `Apps/Mac/JTAnnunciatorMac/`** — confirm the SwiftUI app builds and
+   launches.
 3. **Point WSJT-X at it**: WSJT-X Settings → Reporting → enable UDP Server, host `127.0.0.1`,
    port `2237` (this app's default, changeable in its own Settings). Confirm decodes actually
    show up.
