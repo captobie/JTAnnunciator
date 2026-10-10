@@ -170,3 +170,7 @@ Not a commitment — pick up only what's actually wanted:
 - Per-category alert sounds or spoken callsign announcements.
 - A real FT4/FT8 standard-messages grammar parser, replacing the token-scanning heuristic.
 - An app icon, code signing and notarization for distribution.
+
+## License
+
+Released under the MIT License — see [LICENSE](LICENSE).
