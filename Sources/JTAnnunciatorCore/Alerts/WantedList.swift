@@ -1,9 +1,8 @@
 import Foundation
 
-/// The operator's "wanted" configuration: specific callsigns to watch for, and/or DXCC entities
-/// still needed. Deliberately just these two categories for v1 — JTAlert-style extras (wanted US
-/// states/counties, CQ/ITU zones, continents, LoTW/eQSL status, "worked before on this
-/// band+mode") are real, useful features but not built yet; see the README's scope note.
+/// The operator's "wanted" configuration: specific callsigns to watch for, DXCC entities still
+/// needed, and US states/Canadian provinces still needed. Other JTAlert-style categories (US
+/// counties, CQ/ITU zones, continents, LoTW/eQSL status) aren't built yet; see the README.
 public struct WantedList: Codable, Equatable {
     /// Exact callsigns to alert on, uppercased.
     public var wantedCallsigns: Set<String> = []
